@@ -207,6 +207,7 @@ svg.neck{display:block;width:100%;min-width:760px;height:auto}
 .fbad circle{fill:var(--maj);stroke:var(--maj)} .fbad text{fill:var(--on)}
 .fkey text{text-decoration:underline}
 .vring{fill:none;stroke:var(--fg);stroke-width:2.4;pointer-events:none}
+.shring{fill:none;stroke:var(--fg);stroke-width:1.6;stroke-dasharray:3 2.5;pointer-events:none}
 .fnote{font-size:13px;color:var(--muted);margin:10px 0 0;max-width:90ch}
 .quiz{display:flex;flex-direction:column;gap:10px;margin-top:12px}
 .qrow{display:flex;flex-wrap:wrap;gap:6px}
@@ -369,7 +370,7 @@ const CAGED={
 const TSETS=[[0,1,2],[1,2,3],[2,3,4],[3,4,5]];
 
 const state={root:0,mode:'maj',sel:'I',vcat:'base',voicing:null,vlist:[],
-  neck:'scales',lab:'name',view:'pent',pos:0,shape:'all',overlay:'pent',tset:3,note:0,nview:'explore',qrange:12,
+  neck:'scales',lab:'name',view:'pent',pos:[],shape:'all',overlay:'pent',tset:3,note:0,nview:'explore',qrange:12,
   quiz:{target:null,score:0,total:0,streak:0,best:0,answer:null},
   prog:['I','V','vi','IV'],playing:false,bpm:88,step:0,cur:-1};
 let C={}, scaleNames={}, keyName='C';
@@ -553,12 +554,27 @@ function drawNeck(cells,regions,rings){
   g+=`<line class="fnut" x1="${x0}" x2="${x0}" y1="${top-8}" y2="${top+5*gap+8}"/>`;
   TUN.forEach((m,s)=>g+=`<line class="fstr" x1="${x0}" x2="${W-12}" y1="${sy(s)}" y2="${sy(s)}" stroke-width="${2.6-s*.35}"/><text class="fsn" x="6" y="${sy(s)}">${SNAME[s]}</text>`);
   cells.forEach(c=>g+=`<g class="fd ${c.cls}" data-s="${c.s}" data-f="${c.f}"><circle cx="${fx(c.f)}" cy="${sy(c.s)}" r="10.5"/><text x="${fx(c.f)}" y="${sy(c.s)}">${c.txt}</text></g>`);
-  rings.forEach(([s,f])=>g+=`<circle class="vring" cx="${fx(f)}" cy="${sy(s)}" r="14"/>`);
+  rings.forEach(([s,f,cls])=>g+=`<circle class="${cls||'vring'}" cx="${fx(f)}" cy="${sy(s)}" r="${cls?14.5:14}"/>`);
   return `<svg class="neck" viewBox="0 0 ${W} ${H}" role="img" aria-label="Guitar neck">${g}</svg>`;
 }
 /* A Map keyed "string:fret" keeps one dot per position; later writes win */
 function cellMap(){const m=new Map();return {m,set:(s,f,cls,txt)=>m.set(s+':'+f,{s,f,cls,txt}),list:()=>[...m.values()]};}
 function seg(id,items,cur,attr){return `<div class="seg" id="${id}">${items.map(([v,t])=>`<button data-${attr}="${v}" aria-pressed="${String(v)===String(cur)}">${t}</button>`).join('')}</div>`;}
+
+/* Place the chosen boxes in whichever octave keeps them closest together (e.g. 5-1-2 as one run), sorted by fret */
+function placeBoxes(ks,all){
+  const bs=ks.map(k=>({k,b:all[k-1]})).filter(x=>x.b); if(!bs.length)return [];
+  let best=null;const acc=[];
+  (function rec(i){
+    if(i===bs.length){const wins=bs.map((x,j)=>x.b.win.map(([lo,hi])=>[lo+acc[j],hi+acc[j]]));
+      const lo=Math.min(...wins.flat().map(w=>w[0])),hi=Math.max(...wins.flat().map(w=>w[1]));
+      if(lo<0||hi>FR)return;
+      if(!best||hi-lo<best.span||(hi-lo===best.span&&lo<best.lo))best={span:hi-lo,lo,offs:[...acc]};return;}
+    for(const o of [-12,0,12]){acc.push(o);rec(i+1);acc.pop();}})(0);
+  const offs=best?best.offs:bs.map(()=>0);
+  return bs.map((x,j)=>({k:x.k,f0:x.b.f0+offs[j],win:x.b.win.map(([lo,hi])=>[lo+offs[j],hi+offs[j]])}))
+    .sort((a,b)=>Math.min(...a.win.map(w=>w[0]))-Math.min(...b.win.map(w=>w[0])));
+}
 
 /* ---------- Neck mode: Scales ---------- */
 function neckScales(c){
@@ -566,20 +582,26 @@ function neckScales(c){
   const baseSet=(state.view==='full'?M.scale:M.pent).map(i=>(state.root+i)%12);
   let notes=state.view==='arp'?c.tonesPc.slice():s.notes.slice(); if(state.view==='blues'&&!notes.includes(bl.pc))notes.push(bl.pc);
   if(state.view==='blues')names[bl.pc]=bl.name;
-  const n=state.view==='full'?7:5; if(state.pos>n)state.pos=0;
-  const bx=state.pos?positions()[state.pos-1]:null, cm=cellMap();
+  const n=state.view==='full'?7:5; state.pos=state.pos.filter(k=>k<=n);
+  const bxs=placeBoxes(state.pos,positions()), cm=cellMap(), rings=[];
   TUN.forEach((m,si)=>{for(let f=0;f<=FR;f++){const pc=(m+f)%12;if(!notes.includes(pc))continue;
-    if(bx){const [lo,hi]=bx.win[si],inBase=baseSet.includes(pc);if(inBase?(f<lo||f>hi):(f<lo-1||f>hi+1))continue;}
+    let hits=0;
+    if(bxs.length){const inBase=baseSet.includes(pc);
+      bxs.forEach(b=>{const [lo,hi]=b.win[si];if(inBase?(f>=lo&&f<=hi):(f>=lo-1&&f<=hi+1))hits++;});
+      if(!hits)continue;}
     const isBlue=state.view==='blues'&&pc===bl.pc&&!c.tonesPc.includes(pc);
-    cm.set(si,f,(isBlue?'fb':chordCls(pc,c,true))+(pc===state.root?' fkey':''),label(pc,names,c));}});
-  const regions=bx?[{lo:Math.min(...bx.win.map(w=>w[0])),hi:Math.max(...bx.win.map(w=>w[1])),s0:0,s1:5,label:`Position ${state.pos}`}]:[];
+    cm.set(si,f,(isBlue?'fb':chordCls(pc,c,true))+(pc===state.root?' fkey':''),label(pc,names,c));
+    if(hits>1)rings.push([si,f,'shring']);}});
+  const regions=bxs.map((b,i)=>({lo:Math.min(...b.win.map(w=>w[0])),hi:Math.max(...b.win.map(w=>w[1])),s0:0,s1:5,label:bxs.length>1?`Pos ${b.k}`:`Position ${b.k}`,alt:i%2===1}));
   const ctrl=`<div class="ctrl"><span>Scale</span>${seg('view',[['pent','Pentatonic'],['blues','Blues'],['full','Full scale'],['arp','Chord tones']],state.view,'v')}</div>
-    <div class="ctrl"><span>Position</span>${seg('pos',[[0,'All'],...Array.from({length:n},(_,i)=>[i+1,i+1])],state.pos,'p')}</div>`;
+    <div class="ctrl"><span>Positions</span><div class="seg" id="pos"><button data-p="0" aria-pressed="${!state.pos.length}">All</button>${Array.from({length:n},(_,i)=>`<button data-p="${i+1}" aria-pressed="${state.pos.includes(i+1)}">${i+1}</button>`).join('')}</div></div>`;
   const what={pent:'the pentatonic scale',blues:'the blues scale (pentatonic plus the dashed blue note)',full:'the full scale',arp:'only the chord tones, in other words an arpeggio'}[state.view];
   let posTxt='';
-  if(bx){const sp=(TUN[0]+bx.f0)%12,startName=names[sp]||fallbackName(sp);
-    posTxt=state.view==='full'?` Position ${state.pos} uses three notes per string and starts on ${startName}, fret ${bx.f0} on the low E string.`:` Position ${state.pos} is one of the five classic boxes. It starts on ${startName}, fret ${bx.f0} on the low E string. Learn one box at a time, then practice sliding into the next one.`;}
-  return {ctrl,cm,regions,note:`Showing ${what} over ${c.name}. Filled notes are chord tones, the ringed one is the root. The underlined note is ${keyName}, the root of the key.${posTxt}`};
+  if(bxs.length===1){const b=bxs[0],sp=(TUN[0]+b.f0)%12,startName=names[sp]||fallbackName(sp);
+    posTxt=state.view==='full'?` Position ${b.k} uses three notes per string and starts on ${startName}, fret ${b.f0} on the low E string.`:` Position ${b.k} is one of the five classic boxes. It starts on ${startName}, fret ${b.f0} on the low E string. Tap more positions to see how the boxes connect.`;}
+  else if(bxs.length>1){const lo=Math.min(...regions.map(r=>r.lo)),hi=Math.max(...regions.map(r=>r.hi));
+    posTxt=` Positions ${bxs.map(b=>b.k).join(' → ')} (in neck order) cover frets ${lo}–${hi}. Notes with a dashed ring belong to two boxes. Those are your pivot points: slide or shift on one of them to move into the next position.`;}
+  return {ctrl,cm,regions,rings,note:`Showing ${what} over ${c.name}. Filled notes are chord tones, the ringed one is the root. The underlined note is ${keyName}, the root of the key.${posTxt}`};
 }
 
 /* ---------- Neck mode: CAGED ---------- */
@@ -663,7 +685,7 @@ function neckNotes(){
 function renderNeck(){
   const c=C[state.sel];
   const r=state.neck==='caged'?neckCaged(c):state.neck==='triads'?neckTriads(c):state.neck==='notes'?neckNotes():neckScales(c);
-  const rings=[];
+  const rings=r.rings||[];
   if(state.voicing&&state.neck!=='notes'){const names=nameMap(c);state.voicing.forEach((f,s)=>{if(f!=null){const pc=(TUN[s]+f)%12;r.cm.set(s,f,chordCls(pc,c,true),label(pc,names,c));rings.push([s,f]);}});}
   document.getElementById('ntitle').textContent=state.neck==='notes'?'The neck':`The neck · ${c.name}`;
   document.querySelectorAll('#ntab button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.n===state.neck));
@@ -672,7 +694,7 @@ function renderNeck(){
   document.getElementById('nctrl').innerHTML=r.ctrl;
   document.getElementById('fret').innerHTML=drawNeck(r.cm.list(),r.regions,rings);
   document.getElementById('quiz').innerHTML=r.quiz||'';
-  document.getElementById('fnote').textContent=r.note+(rings.length?' The voicing you picked is circled.':'');
+  document.getElementById('fnote').textContent=r.note+(state.voicing&&state.neck!=='notes'?' The voicing you picked is circled.':'');
 }
 
 /* ---------- Progression ---------- */
@@ -761,9 +783,10 @@ onKey($('vgrid'),e=>{const d=e.target.closest('[data-vi]');if(d){pickV(d);return
 $('ntab').addEventListener('click',e=>{const b=e.target.closest('[data-n]');if(b){state.neck=b.dataset.n;renderNeck();}});
 $('lab').addEventListener('click',e=>{const b=e.target.closest('[data-l]');if(b){state.lab=b.dataset.l;renderNeck();}});
 /* Mode-specific neck controls: one delegated handler, data attribute -> state key */
-const NCTRL={v:['view',String],p:['pos',Number],sh:['shape',String],ov:['overlay',String],ts:['tset',Number],nv:['nview',String],qr:['qrange',Number]};
+const NCTRL={v:['view',String],sh:['shape',String],ov:['overlay',String],ts:['tset',Number],nv:['nview',String],qr:['qrange',Number]};
 $('nctrl').addEventListener('click',e=>{
   const b=e.target.closest('button');if(!b)return;
+  if(b.dataset.p!=null){const k=+b.dataset.p;state.pos=k===0?[]:state.pos.includes(k)?state.pos.filter(x=>x!==k):[...state.pos,k];renderNeck();return;}
   const nb=b.dataset.note;if(nb!=null){state.note=nb==='nat'?'nat':+nb;renderNeck();if(nb!=='nat')playMidis([52+((+nb-4+12)%12)]);return;}
   for(const k in NCTRL)if(b.dataset[k]!=null){const [key,cast]=NCTRL[k];state[key]=cast(b.dataset[k]);if(key==='qrange')state.quiz.target=null;renderNeck();return;}});
 $('fret').addEventListener('click',e=>{const d=e.target.closest('[data-s]');if(!d)return;const s=+d.dataset.s,f=+d.dataset.f;
