@@ -1,7 +1,7 @@
 {
   "name": "Chord Map",
   "short_name": "Chord Map",
-  "description": "Interactive chord map for guitar: keys, chords, voicings and scale positions.",
+  "description": "Interactive chord map for guitar: keys, chords, voicings, scale positions and neck training.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
