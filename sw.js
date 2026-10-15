@@ -1,6 +1,6 @@
 // Offline support: serve from cache, refresh in the background (stale-while-revalidate).
 // Bump CACHE when shipping a change you need users to get on the very next load.
-const CACHE = 'chordmap-v3';
+const CACHE = 'chordmap-v4';
 const PRECACHE = ['./', 'index.html', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
 
 self.addEventListener('install', e => {

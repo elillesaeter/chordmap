@@ -12,6 +12,7 @@
 <meta name="theme-color" content="#0e131a" media="(prefers-color-scheme: dark)">
 <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Music&text=%F0%9D%84%9E%E2%99%AF%E2%99%AD&display=block">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap">
 <style>
 /* Layout: desktop = sticky sidebar (key, scale, progression) + work area (map | chord, voicings, neck).
@@ -70,6 +71,14 @@ button:focus-visible,.vd:focus-visible,.node:focus-visible{outline:2px solid var
 /* Key summary + scale strip */
 .khead{display:flex;flex-wrap:wrap;gap:14px;justify-content:space-between;align-items:flex-start;margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
 .sig{margin:6px 0 0;color:var(--muted);font-size:13px}
+.sigrow{display:flex;align-items:center;gap:6px;margin-top:10px}
+.sigbtn{width:34px;height:34px;border-radius:9px;border:1px solid var(--line);background:var(--surface);font-family:"Noto Music","Apple Symbols","Segoe UI Symbol",serif;font-size:24px;line-height:1;display:grid;place-items:center;padding:0}
+.sigbtn:disabled{opacity:.35;cursor:default}
+.staff{display:block;max-width:100%}
+.staff line{stroke:var(--muted);stroke-width:1}
+.staff text{fill:var(--fg);font-family:"Noto Music","Apple Symbols","Segoe UI Symbol",serif}
+.staff .clef{font-size:46px}
+.staff .acc{font-size:24px;text-anchor:middle}
 .relbox{border:1px dashed var(--line);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:5px;max-width:360px;min-width:0}
 .relbox b{font-family:var(--display);font-size:20px;line-height:1}
 .relbox span{font-size:12.5px;color:var(--muted)}
@@ -380,13 +389,27 @@ function fallbackName(pc){const flat=['C','Db','D','Eb','E','F','Gb','G','Ab','A
 function degLabel(pc,name){const st=(LET.indexOf(name[0])-LET.indexOf(keyName[0])+7)%7, d=((pc-state.root-MAJ[st])%12+18)%12-6;return (d<0?'b'.repeat(-d):'#'.repeat(d))+(st+1);}
 const keyTitle=(n,m)=>n+(m==='maj'?' major':' minor');
 const other=m=>m==='maj'?'min':'maj';
-function relKey(){const pc=state.mode==='maj'?(state.root+9)%12:(state.root+3)%12, m=other(state.mode);return {pc,m,name:LABELS[m][pc]};}
+/* Key signatures: number of sharps (+) or flats (-) -> key name. Covers all 15, including the enharmonic ones (F#/Gb, C#/Db, B/Cb). */
+const SIG_KEY={maj:{'-7':'Cb','-6':'Gb','-5':'Db','-4':'Ab','-3':'Eb','-2':'Bb','-1':'F','0':'C','1':'G','2':'D','3':'A','4':'E','5':'B','6':'F#','7':'C#'},
+  min:{'-7':'Ab','-6':'Eb','-5':'Bb','-4':'F','-3':'C','-2':'G','-1':'D','0':'A','1':'E','2':'B','3':'F#','4':'C#','5':'G#','6':'D#','7':'A#'}};
+const namePc=n=>(LPC[LET.indexOf(n[0])]+[...n.slice(1)].reduce((a,ch)=>a+(ch==='#'?1:ch==='b'?-1:0),0)+12)%12;
+function keySig(){const names=Object.values(scaleNames);return names.filter(n=>n.includes('#')).length-names.filter(n=>n.slice(1).includes('b')).length;}
+function parallelName(){const m=other(state.mode);return Object.values(SIG_KEY[m]).includes(keyName)?keyName:LABELS[m][state.root];}
+function relKey(){const m=other(state.mode),name=SIG_KEY[m][keySig()];return {pc:namePc(name),m,name};}
+function staffSVG(n){
+  const ls=8,top=20,bot=top+4*ls,W=148,H=70,pos={F4:1,G4:2,A4:3,B4:4,C5:5,D5:6,E5:7,F5:8,G5:9};
+  const list=n>0?['F5','C5','G5','D5','A4','E5','B4'].slice(0,n):['B4','E5','A4','D5','G4','C5','F4'].slice(0,-n);
+  let g='';for(let i=0;i<5;i++)g+=`<line x1="1" x2="${W-1}" y1="${top+i*ls}" y2="${top+i*ls}"/>`;
+  g+=`<text class="clef" x="3" y="${bot-ls+8}">\u{1D11E}</text>`;
+  list.forEach((p,i)=>{const y=bot-pos[p]*ls/2;g+=`<text class="acc" x="${38+i*14}" y="${y+(n>0?2:5)}">${n>0?'♯':'♭'}</text>`;});
+  return `<svg class="staff" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Key signature with ${Math.abs(n)} ${n>0?'sharps':'flats'}">${g}</svg>`;
+}
 function blueNote(){const pc=(state.root+(state.mode==='maj'?3:6))%12;return {pc,name:spell(keyName,state.mode==='maj'?2:4,pc)};}
 const list=a=>a.length<2?a.join(''):a.slice(0,-1).join(', ')+' and '+a[a.length-1];
 const keyScale=()=>MODES[state.mode].scale.map(i=>(state.root+i)%12);
 
 function build(){
-  const M=MODES[state.mode]; keyName=LABELS[state.mode][state.root]; scaleNames={};
+  const M=MODES[state.mode]; keyName=state.alias&&state.alias.mode===state.mode&&namePc(state.alias.name)===state.root?state.alias.name:LABELS[state.mode][state.root]; scaleNames={};
   M.scale.forEach((iv,k)=>{const pc=(state.root+iv)%12;scaleNames[pc]=spell(keyName,k,pc);});
   C={}; const cx=200,cy=200,R=158,r=92, step=2*Math.PI/7;
   const mk=(id,iv,q,x,y,ring,target)=>{const pc=(state.root+iv)%12,name=scaleNames[pc];
@@ -403,24 +426,26 @@ function nameMap(c){const n={...scaleNames};c.tonesPc.forEach((p,i)=>n[p]=c.tone
 
 /* ---------- Key ---------- */
 function renderKey(){
-  const M=MODES[state.mode], rel=relKey(), var_=LABELS[other(state.mode)][state.root];
+  const M=MODES[state.mode], rel=relKey(), var_=parallelName();
   const names=Object.values(scaleNames), sh=names.filter(n=>n.includes('#')), fl=names.filter(n=>n.slice(1).includes('b'));
-  const sig=sh.length?`${sh.length} ♯ in the key signature: ${sh.join(' ')}`:fl.length?`${fl.length} ♭ in the key signature: ${fl.join(' ')}`:'No sharps or flats. Just the white keys.';
-  const relIdx=state.mode==='maj'?5:2, relT=keyTitle(rel.name,rel.m);
+  const n=keySig(), relIdx=state.mode==='maj'?5:2, relT=keyTitle(rel.name,rel.m);
+  const ord=n>0?['F','C','G','D','A','E','B']:['B','E','A','D','G','C','F'];
+  const accs=ord.slice(0,Math.abs(n)).map(l=>l+(n>0?'♯':'♭')).join(' ');
+  const sig=n?`${Math.abs(n)} ${n>0?'sharp':'flat'}${Math.abs(n)>1?'s':''}: ${accs}. Same signature as ${relT}.`:`No sharps or flats. Same signature as ${relT}.`;
   const cells=M.deg.map((id,k)=>{const iv=M.scale[k], pc=(state.root+iv)%12, c=C[id], nxt=(k<6?M.scale[k+1]:12)-iv;
     return `<div class="deg${k===0?' home':''}${k===relIdx?' rel':''}"><span class="dn">${degLabel(pc,scaleNames[pc])}</span><b>${scaleNames[pc]}</b>
       <button class="dc c-${c.q}${state.sel===id?' on':''}" data-go="${id}"><span>${c.name}</span><small>${id}</small></button>
       <span class="d7">${c.name7}</span>${k===relIdx?`<span class="cap">${relT} <br>starts here</span>`:''}<i class="step">${nxt===2?'W':'H'}</i></div>`;}).join('');
   document.getElementById('keyinfo').innerHTML=`
     <div class="khead">
-      <div><h2>${keyTitle(keyName,state.mode)}</h2><p class="sig">${sig}</p></div>
+      <div><h2>${keyTitle(keyName,state.mode)}</h2><div class="sigrow"><button class="sigbtn" id="sigdn" aria-label="One more flat" title="One more flat"${n<=-7?' disabled':''}>♭</button>${staffSVG(n)}<button class="sigbtn" id="sigup" aria-label="One more sharp" title="One more sharp"${n>=7?' disabled':''}>♯</button></div><p class="sig">${sig}</p></div>
       <div class="relbox"><span>Relative key</span><b>${relT}</b>
         <span>Same notes and same chords. Only home moves: to the ${state.mode==='maj'?'6th':'3rd'} degree (${rel.name}) instead of the 1st.</span>
         <div class="row"><button class="btn small" id="swrel">Switch to ${relT}</button><button class="btn small" id="swvar" title="Parallel key: same root, different notes">${keyTitle(var_,other(state.mode))}</button></div>
       </div>
     </div>
     <div class="stripwrap"><div class="strip">${cells}</div></div>
-    <p class="stripnote">W is a whole step (two frets), H is a half step (one fret). Each degree shows its triad and 7th chord. The second button above is the parallel key: same root, different notes.</p>`;
+    <p class="stripnote">Reading sheet music? Step ♭ or ♯ until the staff matches the signature after the clef. The signature gives the notes, and the last chord of the piece tells you if it is major or its relative minor. W is a whole step (two frets), H is a half step (one fret). The second button in the box is the parallel key: same root, different notes.</p>`;
 }
 
 /* ---------- Map ---------- */
@@ -712,7 +737,7 @@ function renderAll(){build();renderRoots();renderKey();renderGraph();renderCard(
 function select(id){state.sel=id;state.voicing=null;renderKey();renderGraph();renderCard();renderVoicings();renderNeck();}
 function switchKey(root,mode){
   const keep=state.prog.map(id=>[C[id].root,C[id].q]),sel=[C[state.sel].root,C[state.sel].q];
-  state.root=root;state.mode=mode;build();
+  const n=keySig();state.alias={name:SIG_KEY[mode][n],mode};state.root=root;state.mode=mode;build();
   const find=([r,q])=>{const c=Object.values(C).find(c=>c.root===r&&c.q===q);return c&&c.id;};
   state.sel=find(sel)||'';state.prog=keep.map(find).filter(Boolean);state.step=0;state.voicing=null;renderAll();
 }
@@ -773,9 +798,10 @@ $('card').addEventListener('click',e=>{
 $('keyinfo').addEventListener('click',e=>{
   const g=e.target.closest('[data-go]');if(g){pickChord(g.dataset.go);return;}
   if(e.target.id==='swrel'){const r=relKey();switchKey(r.pc,r.m);}
-  if(e.target.id==='swvar'){state.mode=other(state.mode);state.sel='';state.prog=[...MODES[state.mode].progs[0][1]];state.step=0;state.voicing=null;renderAll();}});
-$('roots').addEventListener('click',e=>{const b=e.target.closest('[data-r]');if(b){state.root=+b.dataset.r;state.voicing=null;renderAll();}});
-$('mode').addEventListener('click',e=>{const b=e.target.closest('[data-m]');if(b&&b.dataset.m!==state.mode){state.mode=b.dataset.m;state.sel='';state.prog=[...MODES[state.mode].progs[0][1]];state.step=0;state.voicing=null;renderAll();}});
+  const sb=e.target.closest('#sigup,#sigdn');if(sb){const n=keySig()+(sb.id==='sigup'?1:-1);if(n<-7||n>7)return;const name=SIG_KEY[state.mode][n];state.alias={name,mode:state.mode};state.root=namePc(name);state.voicing=null;renderAll();return;}
+  if(e.target.id==='swvar'){state.alias={name:parallelName(),mode:other(state.mode)};state.mode=other(state.mode);state.sel='';state.prog=[...MODES[state.mode].progs[0][1]];state.step=0;state.voicing=null;renderAll();}});
+$('roots').addEventListener('click',e=>{const b=e.target.closest('[data-r]');if(b){state.alias=null;state.root=+b.dataset.r;state.voicing=null;renderAll();}});
+$('mode').addEventListener('click',e=>{const b=e.target.closest('[data-m]');if(b&&b.dataset.m!==state.mode){state.alias=null;state.mode=b.dataset.m;state.sel='';state.prog=[...MODES[state.mode].progs[0][1]];state.step=0;state.voicing=null;renderAll();}});
 $('vcat').addEventListener('click',e=>{const b=e.target.closest('[data-c]');if(b){state.vcat=b.dataset.c;state.voicing=null;renderVoicings();renderNeck();}});
 const pickV=el=>{const v=state.vlist[+el.dataset.vi];if(!v)return;const same=state.voicing&&state.voicing.join()===v.frets.join();state.voicing=same?null:v.frets;if(!same)strumFrets(v.frets);renderVoicings();renderNeck();};
 $('vgrid').addEventListener('click',e=>{const d=e.target.closest('[data-vi]');if(d)pickV(d);});
