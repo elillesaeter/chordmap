@@ -47,6 +47,7 @@ body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px
 .brand{display:flex;flex-direction:column;gap:4px}
 h1{font-family:var(--display);font-weight:800;font-size:clamp(28px,5vw,38px);line-height:1;margin:0;letter-spacing:-.02em}
 h2{font-family:var(--display);font-weight:800;font-size:30px;line-height:1;margin:0;letter-spacing:-.02em}
+.ver{margin:0;font-family:var(--mono);font-size:11px;color:var(--muted)}
 .lede{margin:0;color:var(--muted);font-size:14px;max-width:60ch}
 .label{font-size:11px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;min-width:0}
@@ -258,6 +259,7 @@ svg.neck{display:block;width:100%;min-width:760px;height:auto}
     <header class="brand">
       <h1>Chord Map</h1>
       <p class="lede">Pick a key and tap a chord. See where it wants to go, how to play it, and how it lives on the neck.</p>
+      <p class="ver" id="ver"></p>
     </header>
 
     <section class="panel" id="keypanel">
@@ -938,6 +940,7 @@ $('presets').addEventListener('click',e=>{const b=e.target.closest('[data-pre]')
 $('play').addEventListener('click',()=>{if(state.playing){stop();return;}if(!state.prog.length)return;audio();state.playing=true;state.step=0;tick();});
 $('clear').addEventListener('click',()=>{stop();state.prog=[];renderProg();});
 $('bpm').addEventListener('input',e=>{state.bpm=+e.target.value;$('bpmv').textContent=state.bpm;});
+const APP_VERSION='v8 · 2026-10-19';$('ver').textContent=APP_VERSION;
 let savedTuning='e6';try{savedTuning=localStorage.getItem('chordmap.tuning')||'e6';}catch(_){}
 applyTuning(savedTuning);
 $('tuning').innerHTML=Object.entries(TUNINGS).map(([id,t])=>`<option value="${id}">${t.name}</option>`).join('');$('tuning').value=state.tuning;

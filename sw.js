@@ -2,7 +2,7 @@
 // - The page itself (navigations): network first, so a deploy shows up on the next load. Falls back to the cache offline.
 // - Everything else (icons, fonts, manifest): served from cache, refreshed in the background.
 // Installs always bypass the browser's HTTP cache, so a new version can never precache an old index.html.
-const CACHE = 'chordmap-v7';
+const CACHE = 'chordmap-v8';
 const PRECACHE = ['./', 'index.html', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
 
 self.addEventListener('install', e => {

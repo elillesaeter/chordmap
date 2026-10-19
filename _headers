@@ -1,0 +1,7 @@
+# Cloudflare Pages: always revalidate the page and the service worker so deploys show up right away.
+/
+  Cache-Control: no-cache
+/index.html
+  Cache-Control: no-cache
+/sw.js
+  Cache-Control: no-cache
