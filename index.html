@@ -74,7 +74,8 @@ button:focus-visible,.vd:focus-visible,.node:focus-visible{outline:2px solid var
 .formula{color:var(--fg)}
 .formula b{color:var(--dim)}
 .modepick{display:flex;gap:6px;flex-wrap:wrap;align-items:stretch}
-#modesel{font:inherit;font-size:14px;font-weight:600;color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:0 10px;min-height:38px;cursor:pointer}
+#modesel,#tuning{font:inherit;font-size:14px;font-weight:600;color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:0 10px;min-height:38px;cursor:pointer}
+#tuning{font-size:13px;min-height:36px}
 #modesel.on{background:var(--fg);color:var(--bg);border-color:var(--fg)}
 .deg.char .dn{color:var(--dim);font-weight:700}
 .fd.fx circle{stroke:var(--dim);stroke-width:3}
@@ -331,6 +332,7 @@ svg.neck{display:block;width:100%;min-width:760px;height:auto}
             <button data-n="triads">Triads</button>
             <button data-n="notes">Notes</button>
           </div>
+          <select id="tuning" aria-label="Tuning"></select>
           <div class="seg" id="lab">
             <button data-l="name">Names</button>
             <button data-l="deg">Degrees</button>
@@ -348,7 +350,22 @@ svg.neck{display:block;width:100%;min-width:760px;height:auto}
 
 <script>
 const LET='CDEFGAB', LPC=[0,2,4,5,7,9,11], MAJ=[0,2,4,5,7,9,11];
-const TUN=[40,45,50,55,59,64], SNAME=['E','A','D','G','B','e'], FR=17;
+/* Tunings, low string to high. The top six strings of every tuning are standard E A D G B e (low string dropped where named). */
+const STD=[40,45,50,55,59,64], FR=17;
+const TUNINGS={
+  e6:{name:'6-string · Standard',n:[40,45,50,55,59,64],s:['E','A','D','G','B','e']},
+  d6:{name:'6-string · Drop D',n:[38,45,50,55,59,64],s:['D','A','D','G','B','e']},
+  b7:{name:'7-string · Standard B',n:[35,40,45,50,55,59,64],s:['B','E','A','D','G','B','e']},
+  a7:{name:'7-string · Drop A',n:[33,40,45,50,55,59,64],s:['A','E','A','D','G','B','e']},
+  f8:{name:'8-string · Standard F#',n:[30,35,40,45,50,55,59,64],s:['F#','B','E','A','D','G','B','e']},
+  e8:{name:'8-string · Drop E',n:[28,35,40,45,50,55,59,64],s:['E','B','E','A','D','G','B','e']},
+  c9:{name:'9-string · Standard C#',n:[25,30,35,40,45,50,55,59,64],s:['C#','F#','B','E','A','D','G','B','e']}};
+let TUN, SNAME, EOFF, TSETS;
+function applyTuning(id){if(!TUNINGS[id])id='e6';const t=TUNINGS[id];state.tuning=id;TUN=t.n;SNAME=t.s;EOFF=TUN.length-6;
+  TSETS=TUN.slice(2).map((_,i)=>[i,i+1,i+2]);if(state.tset==null||state.tset>=TSETS.length)state.tset=TSETS.length-1;}
+/* A six-string shape (standard tuning) placed on the current tuning: same pitches, extra low strings muted.
+   Dropped low strings get the fret that keeps the note (drop D: low string +2). */
+const mapShape=fr=>[...Array(EOFF).fill(null),...fr.map((f,s)=>{if(f==null)return null;const x=STD[s]+f-TUN[s+EOFF];return x<0?null:x;})];
 const INTS={maj:[0,4,7],min:[0,3,7],dim:[0,3,6],dom7:[0,4,7,10],maj7:[0,4,7,11],m7:[0,3,7,10],m7b5:[0,3,6,10],pow:[0,7]};
 const SUF={maj:'',min:'m',dim:'°',dom7:'7',maj7:'maj7',m7:'m7',m7b5:'m7b5',pow:'5'};
 const QNAME={maj:'major',min:'minor',dim:'diminished',dom7:'dominant 7th'};
@@ -442,10 +459,9 @@ const CAGED={
   min:{C:[[null,3,1,0,1,3],0],A:[[null,0,2,2,1,0],9],G:[[3,1,0,0,3,3],7],E:[[0,2,2,0,0,0],4],D:[[null,null,0,2,3,1],2]},
   dom7:{C:[[null,3,2,3,1,0],0],A:[[null,0,2,0,2,0],9],G:[[3,2,0,0,0,1],7],E:[[0,2,0,1,0,0],4],D:[[null,null,0,2,1,2],2]}
 };
-const TSETS=[[0,1,2],[1,2,3],[2,3,4],[3,4,5]];
 
 const state={root:0,mode:'maj',sel:'I',vcat:'base',voicing:null,vlist:[],
-  neck:'scales',lab:'name',view:'pent',pos:[],shape:'all',overlay:'pent',tset:3,note:0,nview:'explore',qrange:12,
+  neck:'scales',lab:'name',view:'pent',pos:[],shape:'all',overlay:'pent',tset:null,tuning:'e6',note:0,nview:'explore',qrange:12,
   quiz:{target:null,score:0,total:0,streak:0,best:0,answer:null},
   prog:['I','V','vi','IV'],playing:false,bpm:88,step:0,cur:-1};
 let C={}, scaleNames={}, keyName='C';
@@ -571,7 +587,17 @@ function renderCard(){
 }
 
 /* ---------- Voicings ---------- */
-function shapeAt(rootPc,q,str){const tpl=TEMPL[q][str];let r=(rootPc-(str==='E'?4:9)+12)%12;if(tpl.some(x=>x!=null&&x+r<0))r+=12;return {frets:tpl.map(x=>x==null?null:x+r),r};}
+function shapeAt(rootPc,q,str){const tpl=TEMPL[q][str];let r=(rootPc-(str==='E'?4:9)+12)%12;if(tpl.some(x=>x!=null&&x+r<0))r+=12;
+  const frets=mapShape(tpl.map(x=>x==null?null:x+r)),rs=EOFF+(str==='E'?0:1);return {frets,r:frets[rs],rs,t:r};}
+/* Power chord (root, 5th, octave) with its root on string s, for any tuning */
+function powerAt(rootPc,s){if(s+2>=TUN.length)return null;const f0=((rootPc-TUN[s])%12+12)%12;
+  for(const b of [f0,f0+12]){const m=TUN[s]+b,fr=[b,m+7-TUN[s+1],m+12-TUN[s+2]];
+    if(fr.some(x=>x<0||x>FR)||Math.max(...fr)-Math.min(...fr)>3)continue;const frets=Array(TUN.length).fill(null);fr.forEach((x,j)=>frets[s+j]=x);return {frets,r:b,one:fr.every(x=>x===b)};}
+  return null;}
+/* Extended range: add the root (or else the 5th) on the string below an E-shape, if it falls inside the shape */
+function withLowString(v,c){const s=v.rs-1;if(s<0)return null;const fs=v.frets.filter(x=>x!=null),lo=Math.min(...fs)-1,hi=Math.max(...fs)+1;
+  for(const [iv,nm] of [[0,'root'],[INTS[v.q][2],'5th']])for(let f=Math.max(0,lo);f<=hi;f++)if((TUN[s]+f)%12===(c.root+iv)%12){const frets=v.frets.slice();frets[s]=f;return {frets,nm};}
+  return null;}
 const triadQ=c=>c.q==='dom7'?'maj':c.q;
 /* Every close-voiced triad of chord c on three adjacent strings, from the nut up to maxFret */
 function triadRun(c,set,maxFret,maxSpan){
@@ -584,27 +610,28 @@ function triadRun(c,set,maxFret,maxSpan){
 const INV=['Root position','1st inversion','2nd inversion'];
 function triadVoicings(c){
   const tq=triadQ(c), res=[];
-  [[3,4,5],[2,3,4]].forEach((set,si)=>{const best={};
+  const N=TUN.length;[[N-3,N-2,N-1],[N-4,N-3,N-2]].forEach((set,si)=>{const best={};
     triadRun(c,set,15,3).forEach(t=>{if(!best[t.inv])best[t.inv]=t;});
-    Object.values(best).sort((x,y)=>x.mn-y.mn).forEach(t=>{const frets=[null,null,null,null,null,null];set.forEach((s,j)=>frets[s]=t.fr[j]);
+    Object.values(best).sort((x,y)=>x.mn-y.mn).forEach(t=>{const frets=Array(TUN.length).fill(null);set.forEach((s,j)=>frets[s]=t.fr[j]);
       res.push({frets,name:c.rootName+SUF[tq],title:INV[t.inv],sub:si?'D, G and B strings':'G, B and high e strings',q:tq});});});
   return res;
 }
 function voicings(c,cat){
   const out=[],add=v=>{if(!out.some(o=>o.frets.join()===v.frets.join()))out.push(v);};
   if(cat==='base'||cat==='sev'){const q=cat==='base'?c.q:c.q7, name=cat==='base'?c.name:c.name7;
-    if(OPEN[q]&&OPEN[q][c.root]) add({frets:OPEN[q][c.root],name,title:'Open chord',sub:'Uses open strings',q});
-    ['E','A'].forEach(s=>{const {frets,r}=shapeAt(c.root,q,s);add({frets,name,title:r===0?'Open chord':`${s}-shape`,sub:r===0?'Uses open strings':`Root on the ${s} string, fret ${r}`,q,bar:r>0&&!['dim','m7b5'].includes(q),rs:s==='E'?0:1});});}
-  else if(cat==='pow'){if(c.q!=='dim')['E','A'].forEach(s=>{const {frets,r}=shapeAt(c.root,'pow',s);add({frets,name:c.rootName+'5',title:`${s}-shape`,sub:`Root on the ${s} string, fret ${r}`,q:'pow'});});}
+    if(OPEN[q]&&OPEN[q][c.root]) add({frets:mapShape(OPEN[q][c.root]),name,title:'Open chord',sub:'Uses open strings',q});
+    ['E','A'].forEach(s=>{const {frets,r,rs,t}=shapeAt(c.root,q,s);const v={frets,name,title:t===0?'Open chord':`${s}-shape`,sub:t===0?'Uses open strings':`Root on the ${SNAME[rs]} string, fret ${r}`,q,bar:t>0&&!['dim','m7b5'].includes(q),rs};add(v);
+      if(s==='E'&&EOFF>0){const x=withLowString(v,c);if(x)add({...v,frets:x.frets,title:`${s}-shape + low ${SNAME[rs-1]}`,sub:`Adds the ${x.nm} on the ${SNAME[rs-1]} string`});}});}
+  else if(cat==='pow'){if(c.q!=='dim')for(let s=0;s<=EOFF+1;s++){const p=powerAt(c.root,s);if(p)add({frets:p.frets,name:c.rootName+'5',title:`Root on ${SNAME[s]} string`,sub:`Fret ${p.r}${p.one?' · one finger':''}`,q:'pow'});}}
   else triadVoicings(c).forEach(add);
   return out;
 }
 function diagram(v,i){
   const fr=v.frets,fretted=fr.filter(f=>f!=null&&f>0),mx=fretted.length?Math.max(...fretted):1,mn=fretted.length?Math.min(...fretted):1;
-  const start=mx<=4?1:mn,rows=Math.max(4,mx-start+1),x=s=>22+s*17,top=30,fh=20,W=22+5*17+14,H=top+rows*fh+6, root=C[state.sel].root;
+  const N=fr.length,start=mx<=4?1:mn,rows=Math.max(4,mx-start+1),x=s=>22+s*17,top=30,fh=20,W=22+(N-1)*17+14,H=top+rows*fh+6, root=C[state.sel].root;
   let g='';
-  for(let j=0;j<=rows;j++)g+=`<line class="${j===0&&start===1?'dg-nut':'dg-fret'}" x1="${x(0)}" x2="${x(5)}" y1="${top+j*fh}" y2="${top+j*fh}" stroke-width="${j===0&&start===1?4:1.2}"/>`;
-  for(let s=0;s<6;s++)g+=`<line class="dg-str" x1="${x(s)}" x2="${x(s)}" y1="${top}" y2="${top+rows*fh}" stroke-width="1"/>`;
+  for(let j=0;j<=rows;j++)g+=`<line class="${j===0&&start===1?'dg-nut':'dg-fret'}" x1="${x(0)}" x2="${x(N-1)}" y1="${top+j*fh}" y2="${top+j*fh}" stroke-width="${j===0&&start===1?4:1.2}"/>`;
+  for(let s=0;s<N;s++)g+=`<line class="dg-str" x1="${x(s)}" x2="${x(s)}" y1="${top}" y2="${top+rows*fh}" stroke-width="1"/>`;
   if(start>1)g+=`<text class="dg-pos" x="${x(0)-9}" y="${top+fh/2}">${start}</text>`;
   if(v.bar){const r=fr[v.rs];let last=v.rs;fr.forEach((f,s)=>{if(f===r&&s>last)last=s;});if(fr.filter(f=>f===r).length>=3)g+=`<rect class="dg-bar" x="${x(v.rs)-8}" y="${top+(r-start)*fh+3}" width="${x(last)-x(v.rs)+16}" height="${fh-6}" rx="7"/>`;}
   fr.forEach((f,s)=>{if(f==null)g+=`<text class="dg-top" x="${x(s)}" y="${top-9}">×</text>`;else{const pc=(TUN[s]+f)%12,lab=IVL[(pc-root+12)%12];
@@ -627,9 +654,9 @@ function renderVoicings(){
 }
 
 /* ---------- Neck: shared drawing ---------- */
-function box(pcs,startPc,n){let f0=(startPc-4+12)%12;
-  for(let t=0;t<3;t++){const seq=[];for(let p=40+f0;seq.length<6*n;p++)if(pcs.includes(p%12))seq.push(p);
-    const win=[];let neg=false;for(let s=0;s<6;s++){const fs=seq.slice(s*n,s*n+n).map(p=>p-TUN[s]);if(Math.min(...fs)<0)neg=true;win.push([Math.min(...fs),Math.max(...fs)]);}
+function box(pcs,startPc,n){const N=TUN.length;let f0=((startPc-TUN[0])%12+12)%12;
+  for(let t=0;t<3;t++){const seq=[];for(let p=TUN[0]+f0;seq.length<N*n;p++)if(pcs.includes(p%12))seq.push(p);
+    const win=[];let neg=false;for(let s=0;s<N;s++){const fs=seq.slice(s*n,s*n+n).map(p=>p-TUN[s]);if(Math.min(...fs)<0)neg=true;win.push([Math.min(...fs),Math.max(...fs)]);}
     if(neg){f0+=12;continue;}return {win,f0};}
   return null;}
 function pentBoxes(minorRoot){const pent=[0,3,5,7,10].map(i=>(minorRoot+i)%12);return pent.map(p=>box(pent,p,2));}
@@ -642,16 +669,16 @@ function positions(){
 function label(pc,names,c){const nm=names[pc]||fallbackName(pc);return state.lab==='deg'?degLabel(pc,nm):state.lab==='int'?IVL[(pc-c.root+12)%12]:nm;}
 function chordCls(pc,c,strong){return c.tonesPc.includes(pc)?(strong?`ft q-${c.q}${pc===c.root?' root':''}`:`fs fc q-${c.q}`):'fs';}
 function drawNeck(cells,regions,rings){
-  const fw=44,x0=40,top=34,gap=26,W=x0+FR*fw+12,H=top+5*gap+30,fx=f=>f===0?20:x0+(f-.5)*fw,sy=s=>top+(5-s)*gap;
-  let g=`<rect class="fwood" x="${x0}" y="${top-8}" width="${FR*fw}" height="${5*gap+16}" rx="3"/>`;
-  [3,5,7,9,15,17].forEach(f=>g+=`<circle class="finlay" cx="${x0+(f-.5)*fw}" cy="${top+2.5*gap}" r="5"/>`);
-  g+=`<circle class="finlay" cx="${x0+11.5*fw}" cy="${top+1.5*gap}" r="5"/><circle class="finlay" cx="${x0+11.5*fw}" cy="${top+3.5*gap}" r="5"/>`;
+  const N=TUN.length,L=N-1,fw=44,x0=40,top=34,gap=26,W=x0+FR*fw+12,H=top+L*gap+30,fx=f=>f===0?20:x0+(f-.5)*fw,sy=s=>top+(L-s)*gap;
+  let g=`<rect class="fwood" x="${x0}" y="${top-8}" width="${FR*fw}" height="${L*gap+16}" rx="3"/>`;
+  [3,5,7,9,15,17].forEach(f=>g+=`<circle class="finlay" cx="${x0+(f-.5)*fw}" cy="${top+L/2*gap}" r="5"/>`);
+  g+=`<circle class="finlay" cx="${x0+11.5*fw}" cy="${top+(L/2-1)*gap}" r="5"/><circle class="finlay" cx="${x0+11.5*fw}" cy="${top+(L/2+1)*gap}" r="5"/>`;
   regions.forEach(r=>{const a=r.lo===0?x0-30:x0+(r.lo-1)*fw+3,b=x0+r.hi*fw-3,y0=sy(r.s1)-14,y1=sy(r.s0)+14;
     g+=`<rect class="rg${r.alt?' alt':''}" x="${a}" y="${y0}" width="${b-a}" height="${y1-y0}" rx="8"/>`;
     if(r.label)g+=`<text class="rgl" x="${(a+b)/2}" y="${y0-5}">${r.label}</text>`;});
-  for(let f=1;f<=FR;f++)g+=`<line class="fwire" x1="${x0+f*fw}" x2="${x0+f*fw}" y1="${top-8}" y2="${top+5*gap+8}"/><text class="fnum" x="${fx(f)}" y="${H-6}">${f}</text>`;
-  g+=`<line class="fnut" x1="${x0}" x2="${x0}" y1="${top-8}" y2="${top+5*gap+8}"/>`;
-  TUN.forEach((m,s)=>g+=`<line class="fstr" x1="${x0}" x2="${W-12}" y1="${sy(s)}" y2="${sy(s)}" stroke-width="${2.6-s*.35}"/><text class="fsn" x="6" y="${sy(s)}">${SNAME[s]}</text>`);
+  for(let f=1;f<=FR;f++)g+=`<line class="fwire" x1="${x0+f*fw}" x2="${x0+f*fw}" y1="${top-8}" y2="${top+L*gap+8}"/><text class="fnum" x="${fx(f)}" y="${H-6}">${f}</text>`;
+  g+=`<line class="fnut" x1="${x0}" x2="${x0}" y1="${top-8}" y2="${top+L*gap+8}"/>`;
+  TUN.forEach((m,s)=>g+=`<line class="fstr" x1="${x0}" x2="${W-12}" y1="${sy(s)}" y2="${sy(s)}" stroke-width="${(0.85+(L-s)*.32).toFixed(2)}"/><text class="fsn" x="6" y="${sy(s)}">${SNAME[s]}</text>`);
   cells.forEach(c=>g+=`<g class="fd ${c.cls}" data-s="${c.s}" data-f="${c.f}"><circle cx="${fx(c.f)}" cy="${sy(c.s)}" r="10.5"/><text x="${fx(c.f)}" y="${sy(c.s)}">${c.txt}</text></g>`);
   rings.forEach(([s,f,cls])=>g+=`<circle class="${cls||'vring'}" cx="${fx(f)}" cy="${sy(s)}" r="${cls?14.5:14}"/>`);
   return `<svg class="neck" viewBox="0 0 ${W} ${H}" role="img" aria-label="Guitar neck">${g}</svg>`;
@@ -691,7 +718,7 @@ function neckScales(c){
     const isBlue=state.view==='blues'&&pc===bl.pc&&!c.tonesPc.includes(pc), isChar=charPc===pc&&!c.tonesPc.includes(pc);
     cm.set(si,f,(isBlue?'fb':chordCls(pc,c,true))+(isChar?' fx':'')+(pc===state.root?' fkey':''),label(pc,names,c));
     if(hits>1)rings.push([si,f,'shring']);}});
-  const regions=bxs.map((b,i)=>({lo:Math.min(...b.win.map(w=>w[0])),hi:Math.max(...b.win.map(w=>w[1])),s0:0,s1:5,label:bxs.length>1?`Pos ${b.k}`:`Position ${b.k}`,alt:i%2===1}));
+  const regions=bxs.map((b,i)=>({lo:Math.min(...b.win.map(w=>w[0])),hi:Math.max(...b.win.map(w=>w[1])),s0:0,s1:TUN.length-1,label:bxs.length>1?`Pos ${b.k}`:`Position ${b.k}`,alt:i%2===1}));
   const ctrl=`<div class="ctrl"><span>Scale</span>${seg('view',[['pent','Pentatonic'],['blues','Blues'],['full','Full scale'],['arp','Chord tones']],state.view,'v')}</div>
     <div class="ctrl"><span>Positions</span><div class="seg" id="pos"><button data-p="0" aria-pressed="${!state.pos.length}">All</button>${Array.from({length:n},(_,i)=>`<button data-p="${i+1}" aria-pressed="${state.pos.includes(i+1)}">${i+1}</button>`).join('')}</div></div>`;
   const what={pent:'the pentatonic scale',blues:'the blues scale (pentatonic plus the dashed blue note)',full:'the full scale',arp:'only the chord tones, in other words an arpeggio'}[state.view];
@@ -706,7 +733,7 @@ function neckScales(c){
 /* ---------- Neck mode: CAGED ---------- */
 function cagedShapes(c){const set=CAGED[c.q];if(!set)return null;const out=[];
   for(const L of 'CAGED'){const [tpl,base]=set[L],r0=(c.root-base+12)%12;
-    for(const r of [r0,r0+12]){const frets=tpl.map(x=>x==null?null:x+r),fs=frets.filter(x=>x!=null);if(Math.max(...fs)>FR)continue;
+    for(const r of [r0,r0+12]){const frets=mapShape(tpl.map(x=>x==null?null:x+r)),fs=frets.filter(x=>x!=null);if(Math.max(...fs)>FR)continue;
       out.push({L,frets,lo:Math.min(...fs),hi:Math.max(...fs)});}}
   return out.sort((a,b)=>a.lo-b.lo);}
 const chordPent=c=>(c.q==='min'?[0,3,5,7,10]:[0,2,4,7,9]).map(i=>(c.root+i)%12);
@@ -732,15 +759,17 @@ function neckCaged(c){
     else{const sh=sel[0];
       if(state.overlay==='pent'){const b=boxForShape(c,sh);if(b){b.win.forEach(([lo,hi],s)=>{for(let f=lo;f<=hi;f++){const pc=(TUN[s]+f)%12;if(pcs.includes(pc))cm.set(s,f,chordCls(pc,c,false),label(pc,names,c));}});
         extra=` The ${sh.L}-shape sits inside box ${b.k} of ${c.rootName} ${c.q==='min'?'minor':'major'} pentatonic (the same box numbering as the Scales tab uses for this chord's pentatonic).`;}}
-      else{for(let s=0;s<6;s++)for(let f=Math.max(0,sh.lo-1);f<=Math.min(FR,sh.hi+1);f++){const pc=(TUN[s]+f)%12;if(pcs.includes(pc))cm.set(s,f,chordCls(pc,c,false),label(pc,names,c));}
+      else{for(let s=0;s<TUN.length;s++)for(let f=Math.max(0,sh.lo-1);f<=Math.min(FR,sh.hi+1);f++){const pc=(TUN[s]+f)%12;if(pcs.includes(pc))cm.set(s,f,chordCls(pc,c,false),label(pc,names,c));}
         extra=` The ${keyTitle(keyName,state.mode)} scale is shown one fret either side of the shape.`;}}}
-  sel.forEach((sh,i)=>{sh.frets.forEach((f,s)=>{if(f!=null){const pc=(TUN[s]+f)%12;cm.set(s,f,`ft q-${c.q}${pc===c.root?' root':''}`,label(pc,names,c));}});
-    regions.push({lo:sh.lo,hi:sh.hi,s0:0,s1:5,label:sh.L,alt:i%2===1});});
+  sel.forEach((sh,i)=>{
+    for(let s=0;s<EOFF;s++)for(let f=sh.lo;f<=sh.hi;f++){const pc=(TUN[s]+f)%12;if(c.tonesPc.includes(pc))cm.set(s,f,chordCls(pc,c,false),label(pc,names,c));}
+    sh.frets.forEach((f,s)=>{if(f!=null){const pc=(TUN[s]+f)%12;cm.set(s,f,`ft q-${c.q}${pc===c.root?' root':''}`,label(pc,names,c));}});
+    regions.push({lo:sh.lo,hi:sh.hi,s0:0,s1:TUN.length-1,label:sh.L,alt:i%2===1});});
   const order=shapes.filter((x,i,a)=>a.findIndex(y=>y.L===x.L)===i).map(x=>x.L).join(' → ');
   const note=state.shape==='all'
     ?`Every major or minor chord can be played in five shapes, named after the open chords C, A, G, E and D. Up the neck from the nut, ${c.name} goes ${order}, then repeats. Pick one shape to study it, and look at how each shape shares notes with its neighbors.${state.overlay!=='none'?' Ringed notes outside the shapes are the other chord tones.':''}`
     :`The ${sel[0].L}-shape of ${c.name}, frets ${sel[0].lo}–${sel[0].hi}. It is the open ${sel[0].L}${c.q==='min'?'m':c.q==='dom7'?'7':''} chord moved up so its root lands on ${c.rootName}.${extra}`;
-  return {ctrl,cm,regions,note};
+  return {ctrl,cm,regions,note:note+(EOFF>0?` The shapes are the six-string ones. On the extra low string${EOFF>1?'s':''}, chord tones inside each shape are ringed, so you can add them for a heavier bass.`:'')};
 }
 
 /* ---------- Neck mode: Triads ---------- */
@@ -756,7 +785,7 @@ function neckTriads(c){
 /* ---------- Neck mode: Notes ---------- */
 const NAT=[0,2,4,5,7,9,11];
 const noteName=pc=>scaleNames[pc]||fallbackName(pc);
-function newTarget(){const q=state.quiz;let t;do{t={s:Math.floor(Math.random()*6),f:Math.floor(Math.random()*(state.qrange+1))};}while(q.target&&t.s===q.target.s&&t.f===q.target.f);q.target=t;q.answer=null;}
+function newTarget(){const q=state.quiz;let t;do{t={s:Math.floor(Math.random()*TUN.length),f:Math.floor(Math.random()*(state.qrange+1))};}while(q.target&&t.s===q.target.s&&t.f===q.target.f);q.target=t;q.answer=null;}
 function neckNotes(){
   const cm=cellMap();
   let ctrl=`<div class="ctrl"><span>Mode</span>${seg('nview',[['explore','Explore'],['quiz','Quiz']],state.nview,'nv')}</div>`;
@@ -766,7 +795,7 @@ function neckNotes(){
     TUN.forEach((m,s)=>{for(let f=0;f<=FR;f++){const pc=(m+f)%12;if(set.includes(pc)){count++;cm.set(s,f,state.note==='nat'?(pc===0?'fn':'fs'):'fn',noteName(pc));}}});
     const note=state.note==='nat'
       ?'All natural notes (no sharps or flats). Two landmarks make the rest easy: there is no sharp between B and C or between E and F. Every other neighbor pair has one fret between them.'
-      :`${noteName(state.note)} shows up ${count} times between the nut and fret ${FR}. Octave shortcut: from the E, A or D string, go two strings up and two frets right. From the G or B string it is three frets, because the B string is tuned differently. Fret 12 is always the open string again.`;
+      :`${noteName(state.note)} shows up ${count} times between the nut and fret ${FR}. Octave shortcut: go two strings up and two frets right. If that jump crosses the B string (starting on D or G), it is three frets, because the B string is tuned a half step lower than the pattern. Fret 12 is always the open string again.`;
     return {ctrl,cm,regions:[],note,quiz:''};
   }
   ctrl+=`<div class="ctrl"><span>Range</span>${seg('qrange',[[5,'Frets 0–5'],[12,'0–12'],[FR,`0–${FR}`]],state.qrange,'qr')}</div>`;
@@ -774,7 +803,7 @@ function neckNotes(){
   const t=q.target,pc=(TUN[t.s]+t.f)%12;
   if(q.answer==null)cm.set(t.s,t.f,'fq','?');
   else cm.set(t.s,t.f,q.answer===pc?'fok':'fbad',noteName(pc));
-  const msg=q.answer==null?`Which note is this? ${SNAME[t.s]==='e'?'High e':SNAME[t.s]} string, fret ${t.f}.`:q.answer===pc?`Yes, that's ${QUIZNAMES[pc]}.`:`Not quite. It's ${QUIZNAMES[pc]}.`;
+  const msg=q.answer==null?`Which note is this? String ${TUN.length-t.s} (${SNAME[t.s]}), fret ${t.f}.`:q.answer===pc?`Yes, that's ${QUIZNAMES[pc]}.`:`Not quite. It's ${QUIZNAMES[pc]}.`;
   const quiz=`<div class="quiz"><div class="qstat"><span class="qmsg${q.answer==null?'':q.answer===pc?' ok':' bad'}">${msg}</span><span>Score <b>${q.score}/${q.total}</b></span><span>Streak <b>${q.streak}</b></span><span>Best <b>${q.best}</b></span></div>
     <div class="qrow" id="qanswers">${QUIZNAMES.map((n,i)=>`<button data-ans="${i}"${q.answer!=null?' disabled':''}>${n}</button>`).join('')}</div></div>`;
   return {ctrl,cm,regions:[],note:'Name the note on the highlighted fret. Start with frets 0–5, and say the note out loud as you answer. That is what makes it stick.',quiz};
@@ -884,6 +913,8 @@ const pickV=el=>{const v=state.vlist[+el.dataset.vi];if(!v)return;const same=sta
 $('vgrid').addEventListener('click',e=>{const d=e.target.closest('[data-vi]');if(d)pickV(d);});
 onKey($('vgrid'),e=>{const d=e.target.closest('[data-vi]');if(d){pickV(d);return true;}});
 $('ntab').addEventListener('click',e=>{const b=e.target.closest('[data-n]');if(b){state.neck=b.dataset.n;renderNeck();}});
+$('tuning').addEventListener('change',e=>{applyTuning(e.target.value);try{localStorage.setItem('chordmap.tuning',state.tuning);}catch(_){}
+  state.voicing=null;state.quiz.target=null;renderVoicings();renderNeck();});
 $('lab').addEventListener('click',e=>{const b=e.target.closest('[data-l]');if(b){state.lab=b.dataset.l;renderNeck();}});
 /* Mode-specific neck controls: one delegated handler, data attribute -> state key */
 const NCTRL={v:['view',String],sh:['shape',String],ov:['overlay',String],ts:['tset',Number],nv:['nview',String],qr:['qrange',Number]};
@@ -907,6 +938,9 @@ $('presets').addEventListener('click',e=>{const b=e.target.closest('[data-pre]')
 $('play').addEventListener('click',()=>{if(state.playing){stop();return;}if(!state.prog.length)return;audio();state.playing=true;state.step=0;tick();});
 $('clear').addEventListener('click',()=>{stop();state.prog=[];renderProg();});
 $('bpm').addEventListener('input',e=>{state.bpm=+e.target.value;$('bpmv').textContent=state.bpm;});
+let savedTuning='e6';try{savedTuning=localStorage.getItem('chordmap.tuning')||'e6';}catch(_){}
+applyTuning(savedTuning);
+$('tuning').innerHTML=Object.entries(TUNINGS).map(([id,t])=>`<option value="${id}">${t.name}</option>`).join('');$('tuning').value=state.tuning;
 renderAll();
 </script>
 </body>

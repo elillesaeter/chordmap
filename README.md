@@ -5,6 +5,7 @@ Interactive chord map for guitar: keys, chords, voicings and scale positions, pl
 - **Key:** major, minor and the five other modes (Lydian, Mixolydian, Dorian, Phrygian, Locrian), with key signature, scale degrees, triads and 7th chords, and the relative or parent key.
 - **Map:** where each chord likes to go, including borrowed dominant 7ths.
 - **Voicings:** open, E/A-shape barre, 7th, power chords and triads, with interval labels.
+- **Tunings:** 6-string (standard, Drop D), 7-string (B, Drop A), 8-string (F#, Drop E) and 9-string (C#). The choice is remembered on the device.
 - **The neck:** Scales (pentatonic, blues, full, arpeggio, positions), CAGED (five shapes with their pentatonic box), Triads (every inversion per string set) and Notes (explore + quiz).
 
 **Live:** https://elillesaeter.github.io/chordmap/
