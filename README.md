@@ -26,4 +26,4 @@ Firefox-based browsers (Firefox, Zen) on macOS and Linux can't install PWAs; the
 python3 -m http.server 8000
 ```
 
-Then open http://localhost:8000. When you deploy a change, bump `CACHE` in `sw.js` so installed copies pick it up on the next load.
+Then open http://localhost:8000. The page is fetched network-first, so deploys show up on the next load. Bump `CACHE` in `sw.js` when icons, fonts or the manifest change.
