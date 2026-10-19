@@ -71,6 +71,13 @@ button:focus-visible,.vd:focus-visible,.node:focus-visible{outline:2px solid var
 /* Key summary + scale strip */
 .khead{display:flex;flex-wrap:wrap;gap:14px;justify-content:space-between;align-items:flex-start;margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
 .sig{margin:6px 0 0;color:var(--muted);font-size:13px}
+.formula{color:var(--fg)}
+.formula b{color:var(--dim)}
+.modepick{display:flex;gap:6px;flex-wrap:wrap;align-items:stretch}
+#modesel{font:inherit;font-size:14px;font-weight:600;color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:0 10px;min-height:38px;cursor:pointer}
+#modesel.on{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.deg.char .dn{color:var(--dim);font-weight:700}
+.fd.fx circle{stroke:var(--dim);stroke-width:3}
 .sigrow{display:flex;align-items:center;gap:6px;margin-top:10px}
 .sigbtn{width:34px;height:34px;border-radius:9px;border:1px solid var(--line);background:var(--surface);font-family:"Noto Music","Apple Symbols","Segoe UI Symbol",serif;font-size:24px;line-height:1;display:grid;place-items:center;padding:0}
 .sigbtn:disabled{opacity:.35;cursor:default}
@@ -256,9 +263,19 @@ svg.neck{display:block;width:100%;min-width:760px;height:auto}
       <p class="label">Key</p>
       <div class="keys">
         <div class="roots" id="roots"></div>
-        <div class="seg big" id="mode">
-          <button data-m="maj" aria-pressed="true">Major</button>
-          <button data-m="min" aria-pressed="false">Minor</button>
+        <div class="modepick">
+          <div class="seg big" id="mode">
+            <button data-m="maj" aria-pressed="true">Major</button>
+            <button data-m="min" aria-pressed="false">Minor</button>
+          </div>
+          <select id="modesel" aria-label="Other modes">
+            <option value="">Modes…</option>
+            <option value="lyd">Lydian · major ♯4</option>
+            <option value="mix">Mixolydian · major ♭7</option>
+            <option value="dor">Dorian · minor, natural 6</option>
+            <option value="phr">Phrygian · minor ♭2</option>
+            <option value="loc">Locrian · dim ♭5</option>
+          </select>
         </div>
       </div>
       <div id="keyinfo"></div>
@@ -356,6 +373,55 @@ const MODES={
     desc:{i:'Home, in minor. Everything else pulls back here.','ii°':'Unstable passing chord. Points straight at V7.',III:'The bright side. The relative major of i.',iv:'Heavier and darker, a step away from home.',v:'A soft minor version of V. Only pulls home a little.',VI:'Big and open. Used a lot in rock and pop.',VII:'A major chord that lifts. A rock classic.'},
     progs:[['Epic minor',['i','VI','III','VII']],['Andalusian',['i','VII','VI','V7']],['Minor blues',['i','iv','i','V7']],['Mellow',['i','iv','VII','III']],['Drama',['i','VI','iv','V7']]]}
 };
+/* The other five church modes are generated from the major scale; major (Ionian) and minor (Aeolian) above are hand-tuned.
+   Each mode = the major scale started on another degree, so chord qualities, 7ths and mode names are rotations. */
+const MODE_NAMES=['Ionian','Dorian','Phrygian','Lydian','Mixolydian','Aeolian','Locrian'];
+const MODE_K={maj:0,dor:1,phr:2,lyd:3,mix:4,min:5,loc:6};
+const MODE_TITLE={maj:'major',min:'minor',dor:'Dorian',phr:'Phrygian',lyd:'Lydian',mix:'Mixolydian',loc:'Locrian'};
+const MODE_INFO={
+  maj:{feel:'The standard major sound.'},
+  min:{feel:'The standard minor sound, also called natural minor.'},
+  lyd:{char:3,feel:'Major with a raised 4th. Dreamy and floating, a film-score favorite.',sig:['II'],
+    home:'Home in Lydian. A major chord that never quite settles, thanks to the raised 4th.',
+    sigDesc:{II:'The Lydian signature. A major II chord, which holds the raised 4th. Rocking between I and II is the classic Lydian sound.'},
+    moves:{I:['II','vii','V','vi'],II:['I','iii','V'],iii:['vi','II','I'],'#iv°':['V','vii'],V:['I','II'],vi:['II','vii','I'],vii:['iii','I']},
+    progs:[['Lydian vamp',['I','II']],['Floating',['I','II','iii','II']],['Film score',['I','II','vii','I']],['Lift',['I','II','V','I']]]},
+  mix:{char:6,feel:'Major with a flat 7th. Bluesy and relaxed, all over classic rock.',sig:['bVII','v'],
+    home:'Home in Mixolydian. Major, but loose and bluesy because of the flat 7th.',
+    sigDesc:{bVII:'The Mixolydian signature. A major chord a whole step below home. bVII to I is everywhere in rock.',v:'A minor v instead of a major V. It pulls home much more gently.'},
+    moves:{I:['bVII','IV','v','ii'],ii:['v','bVII','I'],'iii°':['IV','vi'],IV:['I','bVII','v'],v:['I','IV','ii'],vi:['ii','IV','bVII'],bVII:['I','IV']},
+    progs:[['Rock vamp',['I','bVII']],['Classic rock',['I','bVII','IV','I']],['Backdoor',['bVII','IV','I','I']],['Mixo groove',['I','v','IV','I']]]},
+  dor:{char:5,feel:'Minor with a natural 6th. Brighter than plain minor. Funk, soul and jam bands.',sig:['IV'],
+    home:'Home in Dorian. A minor chord, but brighter than plain minor because of the natural 6th.',
+    sigDesc:{IV:'The Dorian signature. A major IV in a minor key, made possible by the natural 6th. i to IV is the classic Dorian vamp.'},
+    moves:{i:['IV','bVII','v','ii'],ii:['v','bIII','i'],bIII:['IV','bVII','ii'],IV:['i','bVII','v'],v:['i','IV'],'vi°':['bVII','v'],bVII:['i','IV','bIII']},
+    progs:[['Dorian vamp',['i','IV']],['Minor with a lift',['i','bVII','IV','i']],['Climb',['i','ii','bIII','IV']],['Funk groove',['i','v','IV','i']]]},
+  phr:{char:1,feel:'Minor with a flat 2nd. Dark and tense. Flamenco and metal.',sig:['bII'],
+    home:'Home in Phrygian. Minor and dark, with a half step sitting right above the root.',
+    sigDesc:{bII:'The Phrygian signature. A major chord a half step above home. bII to i is that Spanish, metal-flavored resolution.'},
+    moves:{i:['bII','bvii','bVI','iv'],bII:['i','bIII'],bIII:['bII','iv','i'],iv:['bvii','i','bII'],'v°':['bVI','i'],bVI:['bII','bvii','i'],bvii:['i','bVI']},
+    progs:[['Phrygian vamp',['i','bII']],['Spanish',['i','bII','bIII','bII']],['Dark descent',['i','bvii','bVI','bII']],['Metal',['i','bII','i','bVI']]]},
+  loc:{char:4,feel:'Diminished home with a flat 5th. So unstable it is rarely used, except in metal.',sig:['bII','bV'],
+    home:'Home in Locrian. A diminished chord, so unstable it barely feels like home. That is why Locrian is rare.',
+    sigDesc:{bII:'The strongest chord against a Locrian home. bII to i° is the typical move.',bV:'A major chord on the flat 5th, the note that makes Locrian so unstable.'},
+    moves:{'i°':['bII','bV','bvii'],bII:['i°','biii'],biii:['iv','bII'],iv:['bvii','bII'],bV:['i°','bVI'],bVI:['bII','bvii'],bvii:['i°','biii']},
+    progs:[['Locrian vamp',['i°','bII']],['Unsettled',['i°','bV','bII','i°']],['Shadow',['i°','bvii','bVI','bII']]]}
+};
+function romanFor(i,q,scale){const N=['I','II','III','IV','V','VI','VII'][i],d=scale[i]-MAJ[i];
+  return (d<0?'b'.repeat(-d):'#'.repeat(d))+(q==='maj'||q==='dom7'?N:N.toLowerCase())+(q==='dim'?'°':'');}
+function genMode(id){
+  const k=MODE_K[id],I=MODE_INFO[id],TQ=['maj','min','min','maj','maj','min','dim'],T7=['maj7','m7','m7','maj7','dom7','m7','m7b5'];
+  const scale=[...Array(7)].map((_,i)=>(MAJ[(i+k)%7]-MAJ[k]+12)%12), q=scale.map((_,i)=>TQ[(i+k)%7]);
+  const deg=scale.map((_,i)=>romanFor(i,q[i],scale)), sev={}, modeN={}, desc={};
+  deg.forEach((d,i)=>{sev[d]=T7[(i+k)%7];modeN[d]=MODE_NAMES[(i+k)%7];
+    desc[d]=i===0?I.home:I.sigDesc[d]||(q[i]==='dim'?'Unstable and tense. Mostly a passing chord.':`Part of the mode and safe to use, but the ${I.sig[0]} chord is what really gives ${MODE_TITLE[id]} its sound.`);});
+  const order=[3,0,4,1,5,2,6].map(p=>(p-k+7)%7);              /* circle-of-fifths order of the parent scale */
+  const inner=[];order.forEach((i,g)=>{if(q[i]!=='dim')inner.push([i===0?'V7':'V7/'+deg[i],(scale[i]+7)%12,deg[i],g]);});
+  const pent=scale.includes(4)?[0,2,4,7,9]:scale.includes(7)?[0,3,5,7,10]:[0,3,5,6,10];
+  return {scale,pent,top:order.indexOf(0),deg,sev,modeN,desc,outer:order.map(i=>[deg[i],scale[i],q[i]]),inner,moves:I.moves,progs:I.progs,char:I.char};
+}
+['lyd','mix','dor','phr','loc'].forEach(id=>MODES[id]=genMode(id));
+
 /* Movable chord shapes, low E to high e, relative to the root fret */
 const TEMPL={
   maj:{E:[0,2,2,1,0,0],A:[null,0,2,2,2,0]}, min:{E:[0,2,2,0,0,0],A:[null,0,2,2,1,0]},
@@ -387,15 +453,19 @@ let C={}, scaleNames={}, keyName='C';
 function spell(rootName,steps,pc){const li=(LET.indexOf(rootName[0])+steps)%7;const d=(pc-LPC[li]+12)%12;return LET[li]+({0:'',1:'#',2:'##',11:'b',10:'bb'}[d]??'');}
 function fallbackName(pc){const flat=['C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','B'],sh=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];return (keyName.includes('b')||keyName==='F'?flat:sh)[pc];}
 function degLabel(pc,name){const st=(LET.indexOf(name[0])-LET.indexOf(keyName[0])+7)%7, d=((pc-state.root-MAJ[st])%12+18)%12-6;return (d<0?'b'.repeat(-d):'#'.repeat(d))+(st+1);}
-const keyTitle=(n,m)=>n+(m==='maj'?' major':' minor');
-const other=m=>m==='maj'?'min':'maj';
+const keyTitle=(n,m)=>n+' '+MODE_TITLE[m];
+const parMode=m=>m==='maj'?'min':'maj';
+/* Name a tonic the way its parent major key spells it (C Dorian -> parent Bb major) */
+function keyLabel(m,pc){if(LABELS[m])return LABELS[m][pc];const k=MODE_K[m];return spell(LABELS.maj[(pc-MAJ[k]+12)%12],k,pc);}
 /* Key signatures: number of sharps (+) or flats (-) -> key name. Covers all 15, including the enharmonic ones (F#/Gb, C#/Db, B/Cb). */
 const SIG_KEY={maj:{'-7':'Cb','-6':'Gb','-5':'Db','-4':'Ab','-3':'Eb','-2':'Bb','-1':'F','0':'C','1':'G','2':'D','3':'A','4':'E','5':'B','6':'F#','7':'C#'},
   min:{'-7':'Ab','-6':'Eb','-5':'Bb','-4':'F','-3':'C','-2':'G','-1':'D','0':'A','1':'E','2':'B','3':'F#','4':'C#','5':'G#','6':'D#','7':'A#'}};
 const namePc=n=>(LPC[LET.indexOf(n[0])]+[...n.slice(1)].reduce((a,ch)=>a+(ch==='#'?1:ch==='b'?-1:0),0)+12)%12;
 function keySig(){const names=Object.values(scaleNames);return names.filter(n=>n.includes('#')).length-names.filter(n=>n.slice(1).includes('b')).length;}
-function parallelName(){const m=other(state.mode);return Object.values(SIG_KEY[m]).includes(keyName)?keyName:LABELS[m][state.root];}
-function relKey(){const m=other(state.mode),name=SIG_KEY[m][keySig()];return {pc:namePc(name),m,name};}
+function sigKeyName(m,n){const parent=SIG_KEY.maj[n];if(m==='maj')return parent;const k=MODE_K[m];return spell(parent,k,(namePc(parent)+MAJ[k])%12);}
+function parallelKey(){const m=parMode(state.mode),all=[...Array(15)].map((_,i)=>sigKeyName(m,i-7));return {m,name:all.includes(keyName)?keyName:keyLabel(m,state.root)};}
+/* Major <-> relative minor; any other mode -> its parent major (same notes) */
+function relKey(){const m=state.mode==='maj'?'min':'maj',name=sigKeyName(m,keySig());return {pc:namePc(name),m,name};}
 function staffSVG(n){
   const ls=8,top=20,bot=top+4*ls,W=148,H=70,pos={F4:1,G4:2,A4:3,B4:4,C5:5,D5:6,E5:7,F5:8,G5:9};
   const list=n>0?['F5','C5','G5','D5','A4','E5','B4'].slice(0,n):['B4','E5','A4','D5','G4','C5','F4'].slice(0,-n);
@@ -404,12 +474,12 @@ function staffSVG(n){
   list.forEach((p,i)=>{const y=bot-pos[p]*ls/2;g+=`<text class="acc" x="${38+i*14}" y="${y+(n>0?2:5)}">${n>0?'♯':'♭'}</text>`;});
   return `<svg class="staff" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Key signature with ${Math.abs(n)} ${n>0?'sharps':'flats'}">${g}</svg>`;
 }
-function blueNote(){const pc=(state.root+(state.mode==='maj'?3:6))%12;return {pc,name:spell(keyName,state.mode==='maj'?2:4,pc)};}
+function blueNote(){const maj3=MODES[state.mode].scale.includes(4),pc=(state.root+(maj3?3:6))%12;return {pc,name:spell(keyName,maj3?2:4,pc)};}
 const list=a=>a.length<2?a.join(''):a.slice(0,-1).join(', ')+' and '+a[a.length-1];
 const keyScale=()=>MODES[state.mode].scale.map(i=>(state.root+i)%12);
 
 function build(){
-  const M=MODES[state.mode]; keyName=state.alias&&state.alias.mode===state.mode&&namePc(state.alias.name)===state.root?state.alias.name:LABELS[state.mode][state.root]; scaleNames={};
+  const M=MODES[state.mode]; keyName=state.alias&&state.alias.mode===state.mode&&namePc(state.alias.name)===state.root?state.alias.name:keyLabel(state.mode,state.root); scaleNames={};
   M.scale.forEach((iv,k)=>{const pc=(state.root+iv)%12;scaleNames[pc]=spell(keyName,k,pc);});
   C={}; const cx=200,cy=200,R=158,r=92, step=2*Math.PI/7;
   const mk=(id,iv,q,x,y,ring,target)=>{const pc=(state.root+iv)%12,name=scaleNames[pc];
@@ -426,22 +496,25 @@ function nameMap(c){const n={...scaleNames};c.tonesPc.forEach((p,i)=>n[p]=c.tone
 
 /* ---------- Key ---------- */
 function renderKey(){
-  const M=MODES[state.mode], rel=relKey(), var_=parallelName();
+  const M=MODES[state.mode], rel=relKey(), par=parallelKey(), k=MODE_K[state.mode], isMode=!['maj','min'].includes(state.mode);
   const names=Object.values(scaleNames), sh=names.filter(n=>n.includes('#')), fl=names.filter(n=>n.slice(1).includes('b'));
-  const n=keySig(), relIdx=state.mode==='maj'?5:2, relT=keyTitle(rel.name,rel.m);
+  const n=keySig(), relIdx=state.mode==='maj'?5:state.mode==='min'?2:(7-k)%7, relT=keyTitle(rel.name,rel.m);
+  const ORD=['1st','2nd','3rd','4th','5th','6th','7th'];
+  const formula=M.scale.map((iv,i)=>{const d=iv-MAJ[i],t=(d<0?'♭'.repeat(-d):'♯'.repeat(d))+(i+1);return i===M.char?`<b>${t}</b>`:t;}).join(' ');
+  const charTxt=M.char!=null?` The ${(M.scale[M.char]-MAJ[M.char]<0?'♭':M.scale[M.char]-MAJ[M.char]>0?'♯':'natural ')+(M.char+1)} is its signature note.`:'';
   const ord=n>0?['F','C','G','D','A','E','B']:['B','E','A','D','G','C','F'];
   const accs=ord.slice(0,Math.abs(n)).map(l=>l+(n>0?'♯':'♭')).join(' ');
   const sig=n?`${Math.abs(n)} ${n>0?'sharp':'flat'}${Math.abs(n)>1?'s':''}: ${accs}. Same signature as ${relT}.`:`No sharps or flats. Same signature as ${relT}.`;
   const cells=M.deg.map((id,k)=>{const iv=M.scale[k], pc=(state.root+iv)%12, c=C[id], nxt=(k<6?M.scale[k+1]:12)-iv;
-    return `<div class="deg${k===0?' home':''}${k===relIdx?' rel':''}"><span class="dn">${degLabel(pc,scaleNames[pc])}</span><b>${scaleNames[pc]}</b>
+    return `<div class="deg${k===0?' home':''}${k===relIdx?' rel':''}${k===M.char?' char':''}"${k===M.char?' title="Signature note of the mode"':''}><span class="dn">${degLabel(pc,scaleNames[pc])}</span><b>${scaleNames[pc]}</b>
       <button class="dc c-${c.q}${state.sel===id?' on':''}" data-go="${id}"><span>${c.name}</span><small>${id}</small></button>
       <span class="d7">${c.name7}</span>${k===relIdx?`<span class="cap">${relT} <br>starts here</span>`:''}<i class="step">${nxt===2?'W':'H'}</i></div>`;}).join('');
   document.getElementById('keyinfo').innerHTML=`
     <div class="khead">
-      <div><h2>${keyTitle(keyName,state.mode)}</h2><div class="sigrow"><button class="sigbtn" id="sigdn" aria-label="One more flat" title="One more flat"${n<=-7?' disabled':''}>♭</button>${staffSVG(n)}<button class="sigbtn" id="sigup" aria-label="One more sharp" title="One more sharp"${n>=7?' disabled':''}>♯</button></div><p class="sig">${sig}</p></div>
-      <div class="relbox"><span>Relative key</span><b>${relT}</b>
-        <span>Same notes and same chords. Only home moves: to the ${state.mode==='maj'?'6th':'3rd'} degree (${rel.name}) instead of the 1st.</span>
-        <div class="row"><button class="btn small" id="swrel">Switch to ${relT}</button><button class="btn small" id="swvar" title="Parallel key: same root, different notes">${keyTitle(var_,other(state.mode))}</button></div>
+      <div><h2>${keyTitle(keyName,state.mode)}</h2><div class="sigrow"><button class="sigbtn" id="sigdn" aria-label="One more flat" title="One more flat"${n<=-7?' disabled':''}>♭</button>${staffSVG(n)}<button class="sigbtn" id="sigup" aria-label="One more sharp" title="One more sharp"${n>=7?' disabled':''}>♯</button></div><p class="sig">${sig}</p><p class="sig formula">${MODE_NAMES[k]}: ${formula}. ${MODE_INFO[state.mode].feel}${charTxt}</p></div>
+      <div class="relbox"><span>${isMode?'Same notes as':'Relative key'}</span><b>${relT}</b>
+        <span>${isMode?`${keyTitle(keyName,state.mode)} uses the notes of ${relT}, starting on its ${ORD[k]} degree. Only the home note is different.`:`Same notes and same chords. Only home moves: to the ${state.mode==='maj'?'6th':'3rd'} degree (${rel.name}) instead of the 1st.`}</span>
+        <div class="row"><button class="btn small" id="swrel">Switch to ${relT}</button><button class="btn small" id="swvar" title="Parallel key: same root, different notes">${keyTitle(par.name,par.m)}</button></div>
       </div>
     </div>
     <div class="stripwrap"><div class="strip">${cells}</div></div>
@@ -476,7 +549,7 @@ function scaleFor(c){
 
 /* ---------- Chord card ---------- */
 function renderCard(){
-  const c=C[state.sel], s=scaleFor(c), M=MODES[state.mode], scaleLabel=keyName+(state.mode==='maj'?' major scale':' minor scale');
+  const c=C[state.sel], s=scaleFor(c), M=MODES[state.mode], scaleLabel=keyTitle(keyName,state.mode)+' scale';
   const desc=c.target?`Borrowed tension. Pulls hard toward ${C[c.target].name}.`:M.desc[c.id];
   const fNames=s.foreign.map(p=>c.tones[c.tonesPc.indexOf(p)]);
   let play;
@@ -563,7 +636,8 @@ function pentBoxes(minorRoot){const pent=[0,3,5,7,10].map(i=>(minorRoot+i)%12);r
 function positions(){
   const M=MODES[state.mode];
   if(state.view==='full'){const pcs=keyScale();return pcs.map(p=>box(pcs,p,3));}
-  return pentBoxes(state.mode==='maj'?(state.root+9)%12:state.root);
+  const pent=M.pent.map(i=>(state.root+i)%12), start=M.pent.includes(4)?(state.root+9)%12:state.root;
+  return [...pent].sort((a,b)=>(a-start+12)%12-(b-start+12)%12).map(p=>box(pent,p,2));
 }
 function label(pc,names,c){const nm=names[pc]||fallbackName(pc);return state.lab==='deg'?degLabel(pc,nm):state.lab==='int'?IVL[(pc-c.root+12)%12]:nm;}
 function chordCls(pc,c,strong){return c.tonesPc.includes(pc)?(strong?`ft q-${c.q}${pc===c.root?' root':''}`:`fs fc q-${c.q}`):'fs';}
@@ -608,14 +682,14 @@ function neckScales(c){
   let notes=state.view==='arp'?c.tonesPc.slice():s.notes.slice(); if(state.view==='blues'&&!notes.includes(bl.pc))notes.push(bl.pc);
   if(state.view==='blues')names[bl.pc]=bl.name;
   const n=state.view==='full'?7:5; state.pos=state.pos.filter(k=>k<=n);
-  const bxs=placeBoxes(state.pos,positions()), cm=cellMap(), rings=[];
+  const bxs=placeBoxes(state.pos,positions()), cm=cellMap(), rings=[], charPc=M.char!=null&&state.view==='full'?(state.root+M.scale[M.char])%12:null;
   TUN.forEach((m,si)=>{for(let f=0;f<=FR;f++){const pc=(m+f)%12;if(!notes.includes(pc))continue;
     let hits=0;
     if(bxs.length){const inBase=baseSet.includes(pc);
       bxs.forEach(b=>{const [lo,hi]=b.win[si];if(inBase?(f>=lo&&f<=hi):(f>=lo-1&&f<=hi+1))hits++;});
       if(!hits)continue;}
-    const isBlue=state.view==='blues'&&pc===bl.pc&&!c.tonesPc.includes(pc);
-    cm.set(si,f,(isBlue?'fb':chordCls(pc,c,true))+(pc===state.root?' fkey':''),label(pc,names,c));
+    const isBlue=state.view==='blues'&&pc===bl.pc&&!c.tonesPc.includes(pc), isChar=charPc===pc&&!c.tonesPc.includes(pc);
+    cm.set(si,f,(isBlue?'fb':chordCls(pc,c,true))+(isChar?' fx':'')+(pc===state.root?' fkey':''),label(pc,names,c));
     if(hits>1)rings.push([si,f,'shring']);}});
   const regions=bxs.map((b,i)=>({lo:Math.min(...b.win.map(w=>w[0])),hi:Math.max(...b.win.map(w=>w[1])),s0:0,s1:5,label:bxs.length>1?`Pos ${b.k}`:`Position ${b.k}`,alt:i%2===1}));
   const ctrl=`<div class="ctrl"><span>Scale</span>${seg('view',[['pent','Pentatonic'],['blues','Blues'],['full','Full scale'],['arp','Chord tones']],state.view,'v')}</div>
@@ -626,7 +700,7 @@ function neckScales(c){
     posTxt=state.view==='full'?` Position ${b.k} uses three notes per string and starts on ${startName}, fret ${b.f0} on the low E string.`:` Position ${b.k} is one of the five classic boxes. It starts on ${startName}, fret ${b.f0} on the low E string. Tap more positions to see how the boxes connect.`;}
   else if(bxs.length>1){const lo=Math.min(...regions.map(r=>r.lo)),hi=Math.max(...regions.map(r=>r.hi));
     posTxt=` Positions ${bxs.map(b=>b.k).join(' → ')} (in neck order) cover frets ${lo}–${hi}. Notes with a dashed ring belong to two boxes. Those are your pivot points: slide or shift on one of them to move into the next position.`;}
-  return {ctrl,cm,regions,rings,note:`Showing ${what} over ${c.name}. Filled notes are chord tones, the ringed one is the root. The underlined note is ${keyName}, the root of the key.${posTxt}`};
+  return {ctrl,cm,regions,rings,note:`Showing ${what} over ${c.name}.${charPc!=null?` The purple ring marks ${names[charPc]||fallbackName(charPc)}, the signature note of ${MODE_NAMES[MODE_K[state.mode]]}.`:''} Filled notes are chord tones, the ringed one is the root. The underlined note is ${keyName}, the root of the key.${posTxt}`};
 }
 
 /* ---------- Neck mode: CAGED ---------- */
@@ -730,14 +804,16 @@ function renderProg(){
   document.getElementById('presets').innerHTML=MODES[state.mode].progs.map(([n,ids],i)=>`<button class="pre" data-pre="${i}">${n}<span>${ids.map(id=>C[id].name).join(' – ')}</span></button>`).join('');
 }
 function renderRoots(){
-  document.getElementById('roots').innerHTML=LABELS[state.mode].map((n,i)=>`<button class="chip" data-r="${i}" aria-pressed="${i===state.root}">${n}${state.mode==='min'?'m':''}</button>`).join('');
+  document.getElementById('roots').innerHTML=[...Array(12)].map((_,i)=>keyLabel(state.mode,i)).map((n,i)=>`<button class="chip" data-r="${i}" aria-pressed="${i===state.root}">${n}${state.mode==='min'?'m':''}</button>`).join('');
   document.querySelectorAll('#mode button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.m===state.mode));
+  const ms=document.getElementById('modesel'),other=!['maj','min'].includes(state.mode);ms.value=other?state.mode:'';ms.classList.toggle('on',other);
 }
+function setMode(m,alias){state.alias=alias||null;state.mode=m;state.sel='';state.prog=[...MODES[m].progs[0][1]];state.step=0;state.voicing=null;renderAll();}
 function renderAll(){build();renderRoots();renderKey();renderGraph();renderCard();renderVoicings();renderNeck();renderProg();}
 function select(id){state.sel=id;state.voicing=null;renderKey();renderGraph();renderCard();renderVoicings();renderNeck();}
 function switchKey(root,mode){
   const keep=state.prog.map(id=>[C[id].root,C[id].q]),sel=[C[state.sel].root,C[state.sel].q];
-  const n=keySig();state.alias={name:SIG_KEY[mode][n],mode};state.root=root;state.mode=mode;build();
+  const n=keySig();state.alias={name:sigKeyName(mode,n),mode};state.root=root;state.mode=mode;build();
   const find=([r,q])=>{const c=Object.values(C).find(c=>c.root===r&&c.q===q);return c&&c.id;};
   state.sel=find(sel)||'';state.prog=keep.map(find).filter(Boolean);state.step=0;state.voicing=null;renderAll();
 }
@@ -798,10 +874,11 @@ $('card').addEventListener('click',e=>{
 $('keyinfo').addEventListener('click',e=>{
   const g=e.target.closest('[data-go]');if(g){pickChord(g.dataset.go);return;}
   if(e.target.id==='swrel'){const r=relKey();switchKey(r.pc,r.m);}
-  const sb=e.target.closest('#sigup,#sigdn');if(sb){const n=keySig()+(sb.id==='sigup'?1:-1);if(n<-7||n>7)return;const name=SIG_KEY[state.mode][n];state.alias={name,mode:state.mode};state.root=namePc(name);state.voicing=null;renderAll();return;}
-  if(e.target.id==='swvar'){state.alias={name:parallelName(),mode:other(state.mode)};state.mode=other(state.mode);state.sel='';state.prog=[...MODES[state.mode].progs[0][1]];state.step=0;state.voicing=null;renderAll();}});
+  const sb=e.target.closest('#sigup,#sigdn');if(sb){const n=keySig()+(sb.id==='sigup'?1:-1);if(n<-7||n>7)return;const name=sigKeyName(state.mode,n);state.alias={name,mode:state.mode};state.root=namePc(name);state.voicing=null;renderAll();return;}
+  if(e.target.id==='swvar'){const p=parallelKey();setMode(p.m,{name:p.name,mode:p.m});}});
 $('roots').addEventListener('click',e=>{const b=e.target.closest('[data-r]');if(b){state.alias=null;state.root=+b.dataset.r;state.voicing=null;renderAll();}});
-$('mode').addEventListener('click',e=>{const b=e.target.closest('[data-m]');if(b&&b.dataset.m!==state.mode){state.alias=null;state.mode=b.dataset.m;state.sel='';state.prog=[...MODES[state.mode].progs[0][1]];state.step=0;state.voicing=null;renderAll();}});
+$('mode').addEventListener('click',e=>{const b=e.target.closest('[data-m]');if(b&&b.dataset.m!==state.mode)setMode(b.dataset.m);});
+$('modesel').addEventListener('change',e=>setMode(e.target.value||'maj'));
 $('vcat').addEventListener('click',e=>{const b=e.target.closest('[data-c]');if(b){state.vcat=b.dataset.c;state.voicing=null;renderVoicings();renderNeck();}});
 const pickV=el=>{const v=state.vlist[+el.dataset.vi];if(!v)return;const same=state.voicing&&state.voicing.join()===v.frets.join();state.voicing=same?null:v.frets;if(!same)strumFrets(v.frets);renderVoicings();renderNeck();};
 $('vgrid').addEventListener('click',e=>{const d=e.target.closest('[data-vi]');if(d)pickV(d);});
