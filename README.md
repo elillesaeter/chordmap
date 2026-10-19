@@ -8,7 +8,7 @@ Interactive chord map for guitar: keys, chords, voicings and scale positions, pl
 - **Tunings:** 6-string (standard, Drop D), 7-string (B, Drop A), 8-string (F#, Drop E) and 9-string (C#). The choice is remembered on the device.
 - **The neck:** Scales (pentatonic, blues, full, arpeggio, positions), CAGED (five shapes with their pentatonic box), Triads (every inversion per string set) and Notes (explore + quiz).
 
-**Live:** https://elillesaeter.github.io/chordmap/
+**Live:** https://freechordmap.pages.dev/ (hosted on Cloudflare Pages, deployed from `main`)
 
 ## Install as an app
 
