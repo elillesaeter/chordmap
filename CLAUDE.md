@@ -19,7 +19,7 @@ Interactive guitar theory and practice app: keys and modes, a chord map, voicing
 - `CACHE` in `sw.js` (`chordmap-vN`)
 - `APP_VERSION` in `index.html` (`'vN · YYYY-MM-DD'`), which is shown under the title so the user can see which version is loaded
 
-These two stay in step. They are currently at **v8**.
+These two stay in step. They are currently at **v9**.
 
 ## index.html layout
 
@@ -67,4 +67,4 @@ Add the same kind of check when you add logic.
 - Elias may later buy a cheap side-project domain (e.g. `chordmap.<something>.dev`) and add it as a custom domain on the Pages project. The `pages.dev` name `chordmap` was taken, which is why it is `freechordmap`.
 - If he reports that the app looks old: the old (pre-v7) service worker could serve a stale copy. Fix it with *Clear site data* or a reinstall on iPhone. v7 and later fix this for good.
 - The name "Chord Map" may be outgrown now that the app does more. He said it is fine for now.
-- Possible next ideas, not started: a mode overlay on the map, saving progressions, a metronome or drum loop, and showing the key signature on the staff for the selected chord's notes.
+- Possible next ideas, not started: a mode overlay on the map, saving progressions, a drum loop, and showing the key signature on the staff for the selected chord's notes.
