@@ -506,6 +506,9 @@ function staffSVG(n){
 function blueNote(){const maj3=MODES[state.mode].scale.includes(4),pc=(state.root+(maj3?3:6))%12;return {pc,name:spell(keyName,maj3?2:4,pc)};}
 const list=a=>a.length<2?a.join(''):a.slice(0,-1).join(', ')+' and '+a[a.length-1];
 const keyScale=()=>MODES[state.mode].scale.map(i=>(state.root+i)%12);
+/* Intervals behind the Scales tab view; harmonic minor = natural minor with a raised 7th */
+const HARM=[0,2,3,5,7,8,11];
+const viewIv=M=>state.view==='full'?M.scale:state.view==='harm'?HARM:M.pent;
 
 function build(){
   const M=MODES[state.mode]; keyName=state.alias&&state.alias.mode===state.mode&&namePc(state.alias.name)===state.root?state.alias.name:keyLabel(state.mode,state.root); scaleNames={};
@@ -569,7 +572,7 @@ function renderGraph(){
 
 /* ---------- Scale over the chord ---------- */
 function scaleFor(c){
-  const M=MODES[state.mode], full=keyScale(), base=(state.view==='full'?M.scale:M.pent).map(i=>(state.root+i)%12);
+  const M=MODES[state.mode], full=keyScale(), base=viewIv(M).map(i=>(state.root+i)%12);
   const foreign=c.tonesPc.filter(p=>!full.includes(p)), t=c.target?C[c.target]:null, removed=[];
   foreign.forEach(f=>[(f+11)%12,(f+1)%12].forEach(nb=>{if(full.includes(nb)&&!c.tonesPc.includes(nb)&&!(t&&t.tonesPc.includes(nb))&&!removed.includes(nb))removed.push(nb);}));
   const notes=[...new Set(base.filter(p=>!removed.includes(p)).concat(foreign))];
@@ -675,7 +678,7 @@ function box(pcs,startPc,n){const N=TUN.length;let f0=((startPc-TUN[0])%12+12)%1
 function pentBoxes(minorRoot){const pent=[0,3,5,7,10].map(i=>(minorRoot+i)%12);return pent.map(p=>box(pent,p,2));}
 function positions(){
   const M=MODES[state.mode];
-  if(state.view==='full'){const pcs=keyScale();return pcs.map(p=>box(pcs,p,3));}
+  if(state.view==='full'||state.view==='harm'){const pcs=viewIv(M).map(i=>(state.root+i)%12);return pcs.map(p=>box(pcs,p,3));}
   const pent=M.pent.map(i=>(state.root+i)%12), start=M.pent.includes(4)?(state.root+9)%12:state.root;
   return [...pent].sort((a,b)=>(a-start+12)%12-(b-start+12)%12).map(p=>box(pent,p,2));
 }
@@ -717,12 +720,14 @@ function placeBoxes(ks,all){
 
 /* ---------- Neck mode: Scales ---------- */
 function neckScales(c){
-  const s=scaleFor(c), M=MODES[state.mode], bl=blueNote(), names=nameMap(c);
-  const baseSet=(state.view==='full'?M.scale:M.pent).map(i=>(state.root+i)%12);
+  if(state.view==='harm'&&state.mode!=='min')state.view='full';
+  const s=scaleFor(c), M=MODES[state.mode], bl=blueNote(), names=nameMap(c), harm=state.view==='harm', lt=(state.root+11)%12;
+  const baseSet=viewIv(M).map(i=>(state.root+i)%12);
   let notes=state.view==='arp'?c.tonesPc.slice():s.notes.slice(); if(state.view==='blues'&&!notes.includes(bl.pc))notes.push(bl.pc);
   if(state.view==='blues')names[bl.pc]=bl.name;
-  const n=state.view==='full'?7:5; state.pos=state.pos.filter(k=>k<=n);
-  const bxs=placeBoxes(state.pos,positions()), cm=cellMap(), rings=[], charPc=M.char!=null&&state.view==='full'?(state.root+M.scale[M.char])%12:null;
+  if(harm)names[lt]=spell(keyName,6,lt);
+  const n=state.view==='full'||harm?7:5; state.pos=state.pos.filter(k=>k<=n);
+  const bxs=placeBoxes(state.pos,positions()), cm=cellMap(), rings=[], charPc=harm?lt:M.char!=null&&state.view==='full'?(state.root+M.scale[M.char])%12:null;
   TUN.forEach((m,si)=>{for(let f=0;f<=FR;f++){const pc=(m+f)%12;if(!notes.includes(pc))continue;
     let hits=0;
     if(bxs.length){const inBase=baseSet.includes(pc);
@@ -732,15 +737,15 @@ function neckScales(c){
     cm.set(si,f,(isBlue?'fb':chordCls(pc,c,true))+(isChar?' fx':'')+(pc===state.root?' fkey':''),label(pc,names,c));
     if(hits>1)rings.push([si,f,'shring']);}});
   const regions=bxs.map((b,i)=>({lo:Math.min(...b.win.map(w=>w[0])),hi:Math.max(...b.win.map(w=>w[1])),s0:0,s1:TUN.length-1,label:bxs.length>1?`Pos ${b.k}`:`Position ${b.k}`,alt:i%2===1}));
-  const ctrl=`<div class="ctrl"><span>Scale</span>${seg('view',[['pent','Pentatonic'],['blues','Blues'],['full','Full scale'],['arp','Chord tones']],state.view,'v')}</div>
+  const ctrl=`<div class="ctrl"><span>Scale</span>${seg('view',[['pent','Pentatonic'],['blues','Blues'],['full','Full scale'],...(state.mode==='min'?[['harm','Harmonic']]:[]),['arp','Chord tones']],state.view,'v')}</div>
     <div class="ctrl"><span>Positions</span><div class="seg" id="pos"><button data-p="0" aria-pressed="${!state.pos.length}">All</button>${Array.from({length:n},(_,i)=>`<button data-p="${i+1}" aria-pressed="${state.pos.includes(i+1)}">${i+1}</button>`).join('')}</div></div>`;
-  const what={pent:'the pentatonic scale',blues:'the blues scale (pentatonic plus the dashed blue note)',full:'the full scale',arp:'only the chord tones, in other words an arpeggio'}[state.view];
+  const what={pent:'the pentatonic scale',blues:'the blues scale (pentatonic plus the dashed blue note)',full:'the full scale',harm:'the harmonic minor scale (natural minor with a raised 7th, the note that makes V a major chord)',arp:'only the chord tones, in other words an arpeggio'}[state.view];
   let posTxt='';
   if(bxs.length===1){const b=bxs[0],sp=(TUN[0]+b.f0)%12,startName=names[sp]||fallbackName(sp);
-    posTxt=state.view==='full'?` Position ${b.k} uses three notes per string and starts on ${startName}, fret ${b.f0} on the low E string.`:` Position ${b.k} is one of the five classic boxes. It starts on ${startName}, fret ${b.f0} on the low E string. Tap more positions to see how the boxes connect.`;}
+    posTxt=state.view==='full'||harm?` Position ${b.k} uses three notes per string and starts on ${startName}, fret ${b.f0} on the low E string.`:` Position ${b.k} is one of the five classic boxes. It starts on ${startName}, fret ${b.f0} on the low E string. Tap more positions to see how the boxes connect.`;}
   else if(bxs.length>1){const lo=Math.min(...regions.map(r=>r.lo)),hi=Math.max(...regions.map(r=>r.hi));
     posTxt=` Positions ${bxs.map(b=>b.k).join(' → ')} (in neck order) cover frets ${lo}–${hi}. Notes with a dashed ring belong to two boxes. Those are your pivot points: slide or shift on one of them to move into the next position.`;}
-  return {ctrl,cm,regions,rings,note:`Showing ${what} over ${c.name}.${charPc!=null?` The purple ring marks ${names[charPc]||fallbackName(charPc)}, the signature note of ${MODE_NAMES[MODE_K[state.mode]]}.`:''} Filled notes are chord tones, the ringed one is the root. The underlined note is ${keyName}, the root of the key.${posTxt}`};
+  return {ctrl,cm,regions,rings,note:`Showing ${what} over ${c.name}.${charPc!=null?` The purple ring marks ${names[charPc]||fallbackName(charPc)}, the signature note of ${harm?'harmonic minor':MODE_NAMES[MODE_K[state.mode]]}.`:''} Filled notes are chord tones, the ringed one is the root. The underlined note is ${keyName}, the root of the key.${posTxt}`};
 }
 
 /* ---------- Neck mode: CAGED ---------- */
@@ -966,7 +971,7 @@ document.querySelectorAll('[data-bpm]').forEach(b=>b.addEventListener('click',()
 $('clear').addEventListener('click',()=>{stop();state.prog=[];renderProg();});
 $('meter').addEventListener('change',e=>{state.beats=+e.target.value;state.step=0;});
 $('bpm').addEventListener('input',e=>setBpm(+e.target.value));
-const APP_VERSION='v9 · 2026-10-21';$('ver').textContent=APP_VERSION;
+const APP_VERSION='v10 · 2026-11-15';$('ver').textContent=APP_VERSION;
 let savedTuning='e6';try{savedTuning=localStorage.getItem('chordmap.tuning')||'e6';}catch(_){}
 applyTuning(savedTuning);
 $('tuning').innerHTML=Object.entries(TUNINGS).map(([id,t])=>`<option value="${id}">${t.name}</option>`).join('');$('tuning').value=state.tuning;

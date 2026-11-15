@@ -19,7 +19,7 @@ Interactive guitar theory and practice app: keys and modes, a chord map, voicing
 - `CACHE` in `sw.js` (`chordmap-vN`)
 - `APP_VERSION` in `index.html` (`'vN · YYYY-MM-DD'`), which is shown under the title so the user can see which version is loaded
 
-These two stay in step. They are currently at **v9**.
+These two stay in step. They are currently at **v10**.
 
 ## index.html layout
 
